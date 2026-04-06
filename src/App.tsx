@@ -3,7 +3,7 @@ import { Send, Plane, Hotel, MapPin, Compass, Loader2, User, Bot, Sparkles, Chev
 import Markdown from 'react-markdown';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { chatWithTravelAgent, query_knowledge_base } from './services/gemini';
+import { chatWithTravelAgent, query_knowledge_base, isFlightPriceQuestion } from './services/gemini';
 import { debug } from './utils/debug';
 import { detectRoute, parseTransport, parsePassengerCount, searchBookingLinks, formatBookingOptions } from './services/bookingService';
 import { detectHotelSearch, searchHotels, formatHotelsOptionA, formatHotelsOptionB, formatHotelsOptionC } from './services/hotelService';
@@ -214,9 +214,13 @@ export default function App() {
         }
       }
 
-      // 2. PRICE COMPARISON - So sánh giá vé
-      if (detectPriceComparisonRequest(userMessage)) {
-        debug.log('APP', 'Price comparison request detected');
+      // 2. PRICE COMPARISON - So sánh giá vé (with Gemini intent check)
+      // First, check if user is asking about flight prices using Gemini
+      debug.log('APP', 'Checking flight price intent with Gemini');
+      const isFlightPriceQuery = await isFlightPriceQuestion(userMessage);
+      
+      if (isFlightPriceQuery) {
+        debug.log('APP', 'Gemini confirmed: flight price question detected');
         const details = extractPriceComparisonDetails(userMessage);
         
         if (details.origin && details.destination) {
@@ -243,6 +247,8 @@ export default function App() {
           debug.groupEnd();
           return;
         }
+      } else {
+        debug.log('APP', 'Gemini confirmed: not a flight price question');
       }
 
       // 3. RESTAURANT RECOMMENDATIONS - Gợi ý nhà hàng

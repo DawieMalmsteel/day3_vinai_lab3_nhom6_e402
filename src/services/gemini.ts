@@ -215,3 +215,50 @@ Bot: "Xin lỗi, tôi không có thông tin thời tiết. Nhưng tôi có thể
         throw error;
     }
 };
+
+/**
+ * Classify if user message is asking about flight prices
+ * Returns true if question is about flight prices, false otherwise
+ */
+export const isFlightPriceQuestion = async (userMessage: string): Promise<boolean> => {
+    const model = "gemma-4-26b-a4b-it";
+    
+    debug.log('FLIGHT_INTENT', 'Checking if message is flight price question', { message: userMessage.substring(0, 50) });
+    
+    try {
+        const ai = getAI();
+        const response = await ai.models.generateContent({
+            model,
+            contents: [{
+                role: 'user',
+                parts: [{
+                    text: `Người dùng vừa nói: "${userMessage}"
+
+Hỏi: Người dùng có đang hỏi về giá vé máy bay, chuyến bay, hoặc tìm vé bay không?
+
+Trả lại CHỈ một từ: "true" hoặc "false"
+
+Ví dụ:
+- "vé máy bay đà nẵng hà nội" → true
+- "bay từ TP.HCM đi Đà Nẵng bao nhiêu tiền?" → true
+- "tìm chuyến bay rẻ nhất" → true
+- "hôm nay thời tiết thế nào?" → false
+- "tôi muốn du lịch Đà Nẵng" → false
+
+Chỉ trả về: true hoặc false`
+                }]
+            }]
+        });
+        
+        const responseText = response.text?.toLowerCase().trim() || '';
+        const isFlightPrice = responseText.includes('true');
+        
+        debug.log('FLIGHT_INTENT', `Intent check result: ${isFlightPrice}`, { response: responseText });
+        
+        return isFlightPrice;
+    } catch (error) {
+        debug.error('FLIGHT_INTENT', 'Error checking flight price intent', error);
+        // Fallback to false if API call fails
+        return false;
+    }
+};
