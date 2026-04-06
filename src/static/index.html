@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TravelAgent - Chatbot vs ReAct Agent</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈</text></svg>">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#0ea5e9;--primary-dark:#0284c7;--primary-light:#e0f2fe;
+  --accent:#f97316;--accent-light:#fff7ed;
+  --bg:#f0f9ff;--surface:#fff;--text:#0f172a;--text-muted:#64748b;
+  --border:#e2e8f0;--radius:16px;--shadow:0 4px 24px rgba(0,0,0,.06);
+  --chatbot-color:#8b5cf6;--v1-color:#0ea5e9;--v2-color:#10b981;
+}
+html{font-size:16px}
+body{
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  background:var(--bg);color:var(--text);
+  height:100vh;display:flex;flex-direction:column;overflow:hidden;
+}
+
+/* Header */
+.header{
+  background:linear-gradient(135deg,#0ea5e9 0%,#6366f1 100%);
+  color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px;
+  box-shadow:0 2px 12px rgba(14,165,233,.3);position:relative;z-index:10;
+}
+.header-icon{
+  width:40px;height:40px;background:rgba(255,255,255,.2);
+  border-radius:10px;display:grid;place-items:center;font-size:20px;
+  backdrop-filter:blur(4px);flex-shrink:0;
+}
+.header-text h1{font-size:1.05rem;font-weight:700;letter-spacing:-.3px}
+.header-text p{font-size:.72rem;opacity:.85;margin-top:1px}
+.header-right{
+  margin-left:auto;display:flex;align-items:center;gap:8px;
+}
+.new-session{
+  background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);
+  color:#fff;border-radius:8px;padding:5px 10px;font-size:.75rem;
+  cursor:pointer;transition:.2s;backdrop-filter:blur(4px);
+}
+.new-session:hover{background:rgba(255,255,255,.25)}
+.metrics-btn{
+  background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);
+  color:#fff;border-radius:8px;padding:5px 10px;font-size:.75rem;
+  cursor:pointer;transition:.2s;backdrop-filter:blur(4px);
+}
+.metrics-btn:hover{background:rgba(255,255,255,.25)}
+
+/* Mode Bar */
+.mode-bar{
+  display:flex;align-items:center;gap:6px;padding:8px 16px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  flex-wrap:wrap;
+}
+.mode-bar-label{font-size:.75rem;color:var(--text-muted);font-weight:600;margin-right:4px}
+.mode-btn{
+  border:2px solid var(--border);background:var(--surface);
+  border-radius:20px;padding:5px 14px;font-size:.78rem;
+  color:var(--text-muted);cursor:pointer;transition:.2s;
+  font-weight:500;display:flex;align-items:center;gap:4px;
+}
+.mode-btn:hover{border-color:var(--primary);color:var(--primary)}
+.mode-btn.active[data-mode="chatbot"]{
+  border-color:var(--chatbot-color);background:#f5f3ff;
+  color:var(--chatbot-color);font-weight:600;
+}
+.mode-btn.active[data-mode="v1"]{
+  border-color:var(--v1-color);background:var(--primary-light);
+  color:var(--v1-color);font-weight:600;
+}
+.mode-btn.active[data-mode="v2"]{
+  border-color:var(--v2-color);background:#ecfdf5;
+  color:var(--v2-color);font-weight:600;
+}
+.provider-select{
+  margin-left:auto;display:flex;align-items:center;gap:6px;
+}
+.provider-select label{font-size:.72rem;color:var(--text-muted);font-weight:600}
+.provider-select select{
+  border:1.5px solid var(--border);border-radius:8px;padding:4px 8px;
+  font-size:.78rem;background:var(--surface);color:var(--text);
+  cursor:pointer;outline:none;
+}
+.provider-select select:focus{border-color:var(--primary)}
+
+/* Mode indicator badge */
+.mode-badge{
+  display:inline-block;font-size:.65rem;padding:2px 8px;border-radius:10px;
+  font-weight:600;letter-spacing:.3px;
+}
+.mode-badge.chatbot{background:#f5f3ff;color:var(--chatbot-color)}
+.mode-badge.v1{background:var(--primary-light);color:var(--v1-color)}
+.mode-badge.v2{background:#ecfdf5;color:var(--v2-color)}
+
+/* Chat Area */
+.chat-container{
+  flex:1;overflow-y:auto;padding:16px 16px;
+  display:flex;flex-direction:column;gap:14px;
+  scroll-behavior:smooth;
+}
+.chat-container::-webkit-scrollbar{width:5px}
+.chat-container::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:10px}
+
+/* Welcome */
+.welcome{
+  text-align:center;padding:24px 16px 8px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+}
+.welcome-icon{font-size:44px}
+.welcome h2{font-size:1.1rem;color:var(--text)}
+.welcome p{font-size:.85rem;color:var(--text-muted);max-width:420px;line-height:1.5}
+
+.quick-actions{
+  display:flex;flex-wrap:wrap;justify-content:center;gap:6px;
+  padding:4px 16px 10px;
+}
+.quick-btn{
+  border:1.5px solid var(--border);background:var(--surface);
+  border-radius:20px;padding:6px 14px;font-size:.78rem;
+  color:var(--text);cursor:pointer;transition:.2s;
+  display:flex;align-items:center;gap:5px;
+}
+.quick-btn:hover{
+  border-color:var(--primary);color:var(--primary);
+  background:var(--primary-light);transform:translateY(-1px);
+  box-shadow:0 2px 8px rgba(14,165,233,.12);
+}
+
+/* Messages */
+.msg{display:flex;gap:8px;max-width:82%;animation:fadeUp .3s ease}
+.msg.user{align-self:flex-end;flex-direction:row-reverse}
+.msg.bot{align-self:flex-start}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.avatar{
+  width:32px;height:32px;border-radius:10px;display:grid;
+  place-items:center;font-size:15px;flex-shrink:0;
+}
+.msg.user .avatar{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
+.msg.bot .avatar{background:linear-gradient(135deg,#0ea5e9,#38bdf8);color:#fff}
+.msg.bot .avatar.chatbot-av{background:linear-gradient(135deg,#7c3aed,#a78bfa)}
+.msg.bot .avatar.v2-av{background:linear-gradient(135deg,#059669,#34d399)}
+
+.bubble{
+  padding:10px 14px;border-radius:var(--radius);font-size:.88rem;
+  line-height:1.6;word-break:break-word;box-shadow:var(--shadow);
+}
+.msg.user .bubble{
+  background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;
+  border-bottom-right-radius:4px;
+}
+.msg.bot .bubble{
+  background:var(--surface);color:var(--text);
+  border-bottom-left-radius:4px;border:1px solid var(--border);
+}
+.bubble h1,.bubble h2,.bubble h3{margin:10px 0 5px;font-size:.95rem}
+.bubble h1:first-child,.bubble h2:first-child,.bubble h3:first-child{margin-top:0}
+.bubble ul,.bubble ol{padding-left:18px;margin:5px 0}
+.bubble li{margin:2px 0}
+.bubble strong{font-weight:600}
+.bubble code{background:rgba(0,0,0,.06);padding:2px 5px;border-radius:4px;font-size:.82em}
+.bubble table{border-collapse:collapse;width:100%;margin:6px 0;font-size:.82rem}
+.bubble th,.bubble td{border:1px solid var(--border);padding:5px 8px;text-align:left}
+.bubble th{background:#f1f5f9;font-weight:600}
+.bubble a{color:var(--primary);text-decoration:underline}
+.timestamp{font-size:.65rem;color:var(--text-muted);margin-top:3px;text-align:right;padding:0 4px}
+.msg.bot .timestamp{text-align:left}
+
+/* Typing */
+.typing{display:flex;align-items:center;gap:8px;padding:4px 0}
+.typing .avatar{
+  width:32px;height:32px;border-radius:10px;
+  background:linear-gradient(135deg,#0ea5e9,#38bdf8);color:#fff;
+  display:grid;place-items:center;font-size:15px;
+}
+.dots{display:flex;gap:4px;padding:8px 14px;background:var(--surface);
+  border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.dots span{width:6px;height:6px;border-radius:50%;background:#94a3b8;animation:bounce .6s infinite alternate}
+.dots span:nth-child(2){animation-delay:.15s}
+.dots span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{to{transform:translateY(-5px);background:var(--primary)}}
+
+/* Input */
+.input-area{padding:10px 16px 14px;background:var(--surface);border-top:1px solid var(--border)}
+.input-row{display:flex;gap:8px;max-width:780px;margin:0 auto}
+.input-wrap{
+  flex:1;display:flex;align-items:flex-end;
+  border:2px solid var(--border);border-radius:12px;
+  background:#f8fafc;transition:.2s;padding:3px;
+}
+.input-wrap:focus-within{
+  border-color:var(--primary);background:#fff;
+  box-shadow:0 0 0 3px rgba(14,165,233,.12);
+}
+#msgInput{
+  flex:1;border:none;outline:none;background:transparent;
+  padding:8px 10px;font-size:.9rem;font-family:inherit;
+  resize:none;max-height:100px;line-height:1.5;
+}
+#msgInput::placeholder{color:#94a3b8}
+.send-btn{
+  width:42px;height:42px;border:none;border-radius:10px;
+  background:linear-gradient(135deg,#0ea5e9,#6366f1);color:#fff;
+  cursor:pointer;display:grid;place-items:center;transition:.2s;flex-shrink:0;
+}
+.send-btn:hover{transform:scale(1.05);box-shadow:0 4px 14px rgba(14,165,233,.35)}
+.send-btn:active{transform:scale(.95)}
+.send-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.send-btn svg{width:18px;height:18px}
+.input-hint{text-align:center;font-size:.7rem;color:var(--text-muted);margin-top:5px}
+
+/* Metrics Modal */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;
+  display:none;align-items:center;justify-content:center;
+  backdrop-filter:blur(2px);
+}
+.modal-overlay.open{display:flex}
+.modal{
+  background:var(--surface);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.2);
+  width:92%;max-width:720px;max-height:85vh;overflow:hidden;
+  display:flex;flex-direction:column;animation:modalIn .25s ease;
+}
+@keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(10px)}to{opacity:1;transform:none}}
+.modal-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px;border-bottom:1px solid var(--border);
+}
+.modal-header h2{font-size:1rem;display:flex;align-items:center;gap:6px}
+.modal-close{
+  width:30px;height:30px;border:none;background:#f1f5f9;
+  border-radius:8px;cursor:pointer;font-size:1.1rem;
+  display:grid;place-items:center;transition:.2s;
+}
+.modal-close:hover{background:#e2e8f0}
+.modal-body{padding:16px 18px;overflow-y:auto;flex:1}
+.modal-tabs{display:flex;gap:4px;margin-bottom:14px}
+.modal-tab{
+  padding:6px 14px;border:1.5px solid var(--border);border-radius:8px;
+  font-size:.78rem;cursor:pointer;transition:.2s;background:var(--surface);
+  color:var(--text-muted);
+}
+.modal-tab:hover{border-color:var(--primary)}
+.modal-tab.active{border-color:var(--primary);background:var(--primary-light);color:var(--primary);font-weight:600}
+.metric-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:8px}
+.metric-table th,.metric-table td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}
+.metric-table th{background:#f8fafc;font-weight:600;color:var(--text-muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.5px}
+.metric-table td{color:var(--text)}
+.metric-table tr:hover td{background:#f8fafc}
+.trace-card{
+  border:1px solid var(--border);border-radius:10px;padding:10px 14px;
+  margin-bottom:8px;font-size:.8rem;transition:.2s;
+}
+.trace-card:hover{box-shadow:var(--shadow)}
+.trace-card .trace-header{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.trace-card .trace-status{
+  display:inline-block;padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:600;
+}
+.trace-card .trace-status.success{background:#ecfdf5;color:#059669}
+.trace-card .trace-status.error{background:#fef2f2;color:#dc2626}
+.trace-card .trace-meta{color:var(--text-muted);font-size:.72rem}
+.trace-card .trace-query{margin:4px 0;font-weight:500}
+.trace-card .trace-detail{color:var(--text-muted);font-size:.75rem}
+.no-data{text-align:center;padding:24px;color:var(--text-muted);font-size:.88rem}
+
+/* Responsive */
+@media(max-width:600px){
+  .header{padding:10px 12px}
+  .mode-bar{padding:6px 10px;gap:4px}
+  .mode-btn{padding:4px 10px;font-size:.72rem}
+  .provider-select{margin-left:8px}
+  .msg{max-width:92%}
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-icon">&#9992;</div>
+  <div class="header-text">
+    <h1>TravelAgent</h1>
+    <p>Chatbot vs ReAct Agent Lab</p>
+  </div>
+  <div class="header-right">
+    <button class="metrics-btn" onclick="openMetrics()" title="Xem metrics">&#128202; Metrics</button>
+    <button class="new-session" onclick="newSession()" title="Cuộc hội thoại mới">+ Mới</button>
+  </div>
+</header>
+
+<!-- Mode Selector Bar -->
+<div class="mode-bar">
+  <span class="mode-bar-label">Mode:</span>
+  <button class="mode-btn" data-mode="chatbot" onclick="switchMode('chatbot')">&#128172; Chatbot</button>
+  <button class="mode-btn active" data-mode="v1" onclick="switchMode('v1')">&#129302; Agent v1</button>
+  <button class="mode-btn" data-mode="v2" onclick="switchMode('v2')">&#128640; Agent v2</button>
+  <div class="provider-select">
+    <label for="providerSel">Provider:</label>
+    <select id="providerSel" onchange="switchProvider(this.value)">
+      <option value="openai">OpenAI</option>
+      <option value="gemini">Gemini</option>
+    </select>
+  </div>
+</div>
+
+<!-- Chat -->
+<div class="chat-container" id="chatBox">
+  <div class="welcome" id="welcome">
+    <div class="welcome-icon">&#127758;</div>
+    <h2>Xin chào! Bạn muốn đi đâu?</h2>
+    <p id="welcomeDesc">Agent v1 sẽ sử dụng các công cụ tìm kiếm để tìm vé máy bay và khách sạn phù hợp ngân sách.</p>
+  </div>
+  <div class="quick-actions" id="quickActions">
+    <button class="quick-btn" onclick="sendQuick(this)">&#9992; Vé HN - Đà Nẵng dưới 2 triệu</button>
+    <button class="quick-btn" onclick="sendQuick(this)">&#127968; KS Nha Trang dưới 1.5 triệu</button>
+    <button class="quick-btn" onclick="sendQuick(this)">&#127881; Combo Phú Quốc 5 triệu</button>
+    <button class="quick-btn" onclick="sendQuick(this)">&#128176; Tư vấn du lịch tiết kiệm Đà Lạt</button>
+  </div>
+</div>
+
+<!-- Input -->
+<div class="input-area">
+  <div class="input-row">
+    <div class="input-wrap">
+      <textarea id="msgInput" rows="1" placeholder="Nhập yêu cầu du lịch..." autofocus></textarea>
+    </div>
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+  <div class="input-hint">Enter gửi &middot; Shift+Enter xuống dòng</div>
+</div>
+
+<!-- Metrics Modal -->
+<div class="modal-overlay" id="metricsModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>&#128202; Performance Dashboard</h2>
+      <button class="modal-close" onclick="closeMetrics()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-tabs">
+        <button class="modal-tab active" onclick="showTab('summary',this)">Summary</button>
+        <button class="modal-tab" onclick="showTab('traces',this)">Traces</button>
+      </div>
+      <div id="tabSummary"></div>
+      <div id="tabTraces" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Markdown Parser -->
+<script>
+const md={
+  parse(s){
+    s=s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    s=s.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm,(_,hdr,_a,body)=>{
+      const th=hdr.split('|').filter(c=>c.trim()).map(c=>`<th>${c.trim()}</th>`).join('');
+      const rows=body.trim().split('\n').map(r=>{
+        const tds=r.split('|').filter(c=>c.trim()).map(c=>`<td>${c.trim()}</td>`).join('');
+        return `<tr>${tds}</tr>`;
+      }).join('');
+      return `<table><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table>`;
+    });
+    s=s.replace(/^### (.+)$/gm,'<h3>$1</h3>');
+    s=s.replace(/^## (.+)$/gm,'<h2>$1</h2>');
+    s=s.replace(/^# (.+)$/gm,'<h1>$1</h1>');
+    s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+    s=s.replace(/\*(.+?)\*/g,'<em>$1</em>');
+    s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
+    s=s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>');
+    s=s.replace(/^(\d+)\. (.+)$/gm,'<oli>$2</oli>');
+    s=s.replace(/((?:<oli>.+<\/oli>\n?)+)/g,m=>'<ol>'+m.replace(/<\/?oli>/g,t=>t==='<oli>'?'<li>':'</li>')+'</ol>');
+    s=s.replace(/^[-*] (.+)$/gm,'<uli>$1</uli>');
+    s=s.replace(/((?:<uli>.+<\/uli>\n?)+)/g,m=>'<ul>'+m.replace(/<\/?uli>/g,t=>t==='<uli>'?'<li>':'</li>')+'</ul>');
+    s=s.replace(/\n{2,}/g,'</p><p>');
+    s=s.replace(/\n/g,'<br>');
+    return `<p>${s}</p>`.replace(/<p><\/p>/g,'')
+      .replace(/<p>(<h[123]>)/g,'$1').replace(/(<\/h[123]>)<\/p>/g,'$1')
+      .replace(/<p>(<[uo]l>)/g,'$1').replace(/(<\/[uo]l>)<\/p>/g,'$1')
+      .replace(/<p>(<table>)/g,'$1').replace(/(<\/table>)<\/p>/g,'$1');
+  }
+};
+</script>
+
+<script>
+let sessionId = crypto.randomUUID();
+let currentMode = 'v1';
+let currentProvider = 'openai';
+const chatBox = document.getElementById('chatBox');
+const msgInput = document.getElementById('msgInput');
+const sendBtn = document.getElementById('sendBtn');
+let isLoading = false;
+
+const MODE_INFO = {
+  chatbot: {
+    icon: '&#128172;', name: 'Chatbot Baseline', avatarClass: 'chatbot-av',
+    desc: 'Chatbot đơn giản chỉ dựa trên kiến thức chung, KHÔNG có công cụ tìm kiếm.',
+    color: 'var(--chatbot-color)'
+  },
+  v1: {
+    icon: '&#129302;', name: 'Agent v1', avatarClass: '',
+    desc: 'Agent v1 sử dụng các công cụ tìm kiếm để tìm vé máy bay và khách sạn phù hợp ngân sách.',
+    color: 'var(--v1-color)'
+  },
+  v2: {
+    icon: '&#128640;', name: 'Agent v2 (Improved)', avatarClass: 'v2-av',
+    desc: 'Agent v2 cải tiến: prompt tốt hơn, xử lý lỗi tốt hơn, format kết quả chuyên nghiệp hơn.',
+    color: 'var(--v2-color)'
+  }
+};
+
+function timeStr(){
+  return new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});
+}
+function scrollBottom(){
+  requestAnimationFrame(()=>chatBox.scrollTop=chatBox.scrollHeight);
+}
+function hideWelcome(){
+  const w=document.getElementById('welcome');
+  const q=document.getElementById('quickActions');
+  if(w) w.style.display='none';
+  if(q) q.style.display='none';
+}
+
+function addMessage(text, role){
+  hideWelcome();
+  const wrap=document.createElement('div');
+  wrap.className=`msg ${role}`;
+
+  const avatar=document.createElement('div');
+  avatar.className='avatar';
+  if(role==='bot'){
+    const info=MODE_INFO[currentMode];
+    avatar.classList.add(info.avatarClass||'x');
+    avatar.innerHTML=info.icon;
+  } else {
+    avatar.innerHTML='&#128100;';
+  }
+
+  const col=document.createElement('div');
+
+  if(role==='bot'){
+    const badge=document.createElement('span');
+    badge.className=`mode-badge ${currentMode}`;
+    badge.textContent=MODE_INFO[currentMode].name;
+    col.appendChild(badge);
+  }
+
+  const bubble=document.createElement('div');
+  bubble.className='bubble';
+  try{
+    bubble.innerHTML=role==='bot'?md.parse(text||''):(text||'').replace(/\n/g,'<br>');
+  }catch(err){
+    bubble.textContent=text||'';
+  }
+
+  const ts=document.createElement('div');
+  ts.className='timestamp';
+  ts.textContent=timeStr() + (role==='bot'?` · ${currentProvider}`:'');
+
+  col.appendChild(bubble);
+  col.appendChild(ts);
+  wrap.appendChild(avatar);
+  wrap.appendChild(col);
+  chatBox.appendChild(wrap);
+  scrollBottom();
+}
+
+function addSystemMsg(text){
+  hideWelcome();
+  const el=document.createElement('div');
+  el.style.cssText='text-align:center;padding:6px;font-size:.75rem;color:var(--text-muted);';
+  el.innerHTML=text;
+  chatBox.appendChild(el);
+  scrollBottom();
+}
+
+function showTyping(){
+  hideWelcome();
+  const info=MODE_INFO[currentMode];
+  const el=document.createElement('div');
+  el.className='typing';el.id='typing';
+  el.innerHTML=`<div class="avatar ${info.avatarClass||''}">${info.icon}</div>
+    <div class="dots"><span></span><span></span><span></span></div>`;
+  chatBox.appendChild(el);scrollBottom();
+}
+function removeTyping(){const el=document.getElementById('typing');if(el) el.remove();}
+
+function setLoading(v){
+  isLoading=v;sendBtn.disabled=v;msgInput.disabled=v;
+  if(!v) msgInput.focus();
+}
+
+function switchMode(mode){
+  if(mode===currentMode) return;
+  currentMode=mode;
+  document.querySelectorAll('.mode-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.mode===mode);
+  });
+  sessionId=crypto.randomUUID();
+  const info=MODE_INFO[mode];
+  chatBox.innerHTML=`
+    <div class="welcome" id="welcome">
+      <div class="welcome-icon">&#127758;</div>
+      <h2>Xin chào! Bạn muốn đi đâu?</h2>
+      <p id="welcomeDesc">${info.desc}</p>
+    </div>
+    <div class="quick-actions" id="quickActions">
+      <button class="quick-btn" onclick="sendQuick(this)">&#9992; Vé HN - Đà Nẵng dưới 2 triệu</button>
+      <button class="quick-btn" onclick="sendQuick(this)">&#127968; KS Nha Trang dưới 1.5 triệu</button>
+      <button class="quick-btn" onclick="sendQuick(this)">&#127881; Combo Phú Quốc 5 triệu</button>
+      <button class="quick-btn" onclick="sendQuick(this)">&#128176; Tư vấn du lịch tiết kiệm Đà Lạt</button>
+    </div>`;
+  addSystemMsg(`Đã chuyển sang <strong>${info.name}</strong>`);
+  msgInput.value='';msgInput.focus();
+}
+
+function switchProvider(provider){
+  if(provider===currentProvider) return;
+  currentProvider=provider;
+  sessionId=crypto.randomUUID();
+  addSystemMsg(`Đã chuyển provider sang <strong>${provider.toUpperCase()}</strong>`);
+}
+
+async function sendMessage(){
+  const text=msgInput.value.trim();
+  if(!text||isLoading) return;
+  msgInput.value='';autoResize();
+  addMessage(text,'user');
+  setLoading(true);showTyping();
+
+  const ctrl=new AbortController();
+  const tid=setTimeout(()=>ctrl.abort(),120000);
+
+  try{
+    const res=await fetch('/api/chat',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        query:text, session_id:sessionId,
+        user_id:'web_user', mode:currentMode, provider:currentProvider
+      }),
+      signal:ctrl.signal
+    });
+    clearTimeout(tid);
+    if(!res.ok){
+      let errMsg=`Server error (${res.status})`;
+      try{const d=await res.json();if(d.error) errMsg=d.error;}catch(_){}
+      removeTyping();addMessage('Xin lỗi, đã xảy ra lỗi: '+errMsg,'bot');return;
+    }
+    const data=await res.json();
+    removeTyping();
+    if(data.error) addMessage('Xin lỗi, đã xảy ra lỗi: '+data.error,'bot');
+    else addMessage(data.response||'Không có kết quả.','bot');
+  }catch(e){
+    clearTimeout(tid);removeTyping();
+    if(e.name==='AbortError') addMessage('Quá thời gian chờ. Vui lòng thử lại.','bot');
+    else{addMessage('Không thể kết nối server. Vui lòng thử lại.','bot');console.error(e);}
+  }finally{setLoading(false);}
+}
+
+function sendQuick(btn){
+  const raw=btn.textContent.trim();
+  const text=raw.replace(/^[^\p{L}\p{N}]+/u,'').trim();
+  msgInput.value=text;sendMessage();
+}
+
+function newSession(){
+  sessionId=crypto.randomUUID();
+  isLoading=false;sendBtn.disabled=false;msgInput.disabled=false;
+  const info=MODE_INFO[currentMode];
+  chatBox.innerHTML=`
+    <div class="welcome" id="welcome">
+      <div class="welcome-icon">&#127758;</div>
+      <h2>Xin chào! Bạn muốn đi đâu?</h2>
+      <p id="welcomeDesc">${info.desc}</p>
+    </div>
+    <div class="quick-actions" id="quickActions">
+      <button class="quick-btn" onclick="sendQuick(this)">&#9992; Vé HN - Đà Nẵng dưới 2 triệu</button>
+      <button class="quick-btn" onclick="sendQuick(this)">&#127968; KS Nha Trang dưới 1.5 triệu</button>
+      <button class="quick-btn" onclick="sendQuick(this)">&#127881; Combo Phú Quốc 5 triệu</button>
+      <button class="quick-btn" onclick="sendQuick(this)">&#128176; Tư vấn du lịch tiết kiệm Đà Lạt</button>
+    </div>`;
+  msgInput.value='';msgInput.focus();
+}
+
+function autoResize(){
+  msgInput.style.height='auto';
+  msgInput.style.height=Math.min(msgInput.scrollHeight,100)+'px';
+}
+msgInput.addEventListener('input',autoResize);
+msgInput.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}
+});
+
+/* ── Metrics Modal ──────────────────────────────── */
+function openMetrics(){
+  document.getElementById('metricsModal').classList.add('open');
+  loadMetrics();
+}
+function closeMetrics(){
+  document.getElementById('metricsModal').classList.remove('open');
+}
+document.getElementById('metricsModal').addEventListener('click',e=>{
+  if(e.target===e.currentTarget) closeMetrics();
+});
+
+function showTab(tab, btn){
+  document.querySelectorAll('.modal-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tabSummary').style.display=tab==='summary'?'':'none';
+  document.getElementById('tabTraces').style.display=tab==='traces'?'':'none';
+  if(tab==='traces') loadTraces();
+}
+
+async function loadMetrics(){
+  const el=document.getElementById('tabSummary');
+  el.innerHTML='<p style="color:var(--text-muted);font-size:.85rem">Loading...</p>';
+  try{
+    const res=await fetch('/api/metrics');
+    const data=await res.json();
+    const s=data.summary;
+    if(!Object.keys(s).length){
+      el.innerHTML='<div class="no-data">Chưa có dữ liệu. Hãy gửi một số tin nhắn trước!</div>';
+      return;
+    }
+    let html=`<table class="metric-table">
+      <thead><tr><th>Metric</th>`;
+    const modes=Object.keys(s);
+    modes.forEach(m=>{html+=`<th>${MODE_INFO[m]?.name||m}</th>`;});
+    html+=`</tr></thead><tbody>`;
+
+    const rows=[
+      ['Total Requests',m=>s[m].total_requests],
+      ['Avg Latency (ms)',m=>s[m].avg_latency_ms.toLocaleString()+'ms'],
+      ['Total Tool Calls',m=>s[m].total_tool_calls],
+      ['Avg Tool Calls/Req',m=>s[m].avg_tool_calls],
+      ['Success Rate',m=>s[m].success_rate+'%'],
+      ['Errors',m=>s[m].error_count],
+    ];
+    rows.forEach(([label,fn])=>{
+      html+=`<tr><td><strong>${label}</strong></td>`;
+      modes.forEach(m=>{html+=`<td>${fn(m)}</td>`;});
+      html+=`</tr>`;
+    });
+    html+=`</tbody></table>`;
+    el.innerHTML=html;
+  }catch(e){
+    el.innerHTML='<div class="no-data">Không thể tải metrics: '+e.message+'</div>';
+  }
+}
+
+async function loadTraces(){
+  const el=document.getElementById('tabTraces');
+  el.innerHTML='<p style="color:var(--text-muted);font-size:.85rem">Loading...</p>';
+  try{
+    const res=await fetch('/api/traces?limit=20');
+    const data=await res.json();
+    if(!data.traces.length){
+      el.innerHTML='<div class="no-data">Chưa có traces. Hãy gửi tin nhắn trước!</div>';
+      return;
+    }
+    let html='';
+    data.traces.forEach(t=>{
+      const tools=t.tool_calls||[];
+      const toolStr=tools.length?tools.map(tc=>`<code>${tc.tool_name}</code> (${tc.duration_ms||'?'}ms)`).join(', '):'Không dùng tool';
+      html+=`<div class="trace-card">
+        <div class="trace-header">
+          <span class="trace-status ${t.status}">${t.status.toUpperCase()}</span>
+          <span class="mode-badge ${t.mode}">${MODE_INFO[t.mode]?.name||t.mode}</span>
+          <span class="trace-meta">${t.provider} · ${t.duration_ms}ms</span>
+        </div>
+        <div class="trace-query">${(t.query||'').substring(0,120)}</div>
+        <div class="trace-detail">Tools: ${toolStr}</div>
+        <div class="trace-detail">Response: ${(t.response_preview||'').substring(0,150)}...</div>
+      </div>`;
+    });
+    el.innerHTML=html;
+  }catch(e){
+    el.innerHTML='<div class="no-data">Không thể tải traces: '+e.message+'</div>';
+  }
+}
+</script>
+</body>
+</html>

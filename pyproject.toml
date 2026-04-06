@@ -1,0 +1,15 @@
+[project]
+name = "demo-adk"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "google-adk>=0.1.0",
+    "google-generativeai>=0.1.0",
+    "python-dotenv>=1.0.0",
+    "requests>=2.31.0",
+    "fastapi",
+    "uvicorn[standard]",
+    "litellm>=1.83.3",
+]
