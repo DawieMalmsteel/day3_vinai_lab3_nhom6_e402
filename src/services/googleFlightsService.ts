@@ -31,6 +31,26 @@ const mockFlightDatabase: Record<string, FlightPrice[]> = {
     { airline: 'Vietjet', price: 300000, departureTime: '11:45', arrivalTime: '13:15', duration: '1h 30m', rating: 4.2 },
     { airline: 'Bamboo Airways', price: 480000, departureTime: '15:45', arrivalTime: '17:15', duration: '1h 30m', rating: 4.7 },
   ],
+  'danang-dalat': [
+    { airline: 'Vietnam Airlines', price: 520000, departureTime: '07:30', arrivalTime: '08:45', duration: '1h 15m', rating: 4.8 },
+    { airline: 'Vietjet', price: 280000, departureTime: '10:15', arrivalTime: '11:30', duration: '1h 15m', rating: 4.2 },
+    { airline: 'Bamboo Airways', price: 420000, departureTime: '14:00', arrivalTime: '15:15', duration: '1h 15m', rating: 4.7 },
+  ],
+  'dalat-danang': [
+    { airline: 'Vietnam Airlines', price: 520000, departureTime: '09:00', arrivalTime: '10:15', duration: '1h 15m', rating: 4.8 },
+    { airline: 'Vietjet', price: 280000, departureTime: '12:30', arrivalTime: '13:45', duration: '1h 15m', rating: 4.2 },
+    { airline: 'Bamboo Airways', price: 420000, departureTime: '16:00', arrivalTime: '17:15', duration: '1h 15m', rating: 4.7 },
+  ],
+  'tp.hcm-dalat': [
+    { airline: 'Vietnam Airlines', price: 650000, departureTime: '08:00', arrivalTime: '09:30', duration: '1h 30m', rating: 4.8 },
+    { airline: 'Vietjet', price: 380000, departureTime: '11:00', arrivalTime: '12:30', duration: '1h 30m', rating: 4.2 },
+    { airline: 'Bamboo Airways', price: 520000, departureTime: '15:00', arrivalTime: '16:30', duration: '1h 30m', rating: 4.7 },
+  ],
+  'dalat-tp.hcm': [
+    { airline: 'Vietnam Airlines', price: 650000, departureTime: '10:00', arrivalTime: '11:30', duration: '1h 30m', rating: 4.8 },
+    { airline: 'Vietjet', price: 380000, departureTime: '13:15', arrivalTime: '14:45', duration: '1h 30m', rating: 4.2 },
+    { airline: 'Bamboo Airways', price: 520000, departureTime: '17:00', arrivalTime: '18:30', duration: '1h 30m', rating: 4.7 },
+  ],
 };
 
 /**
@@ -50,6 +70,9 @@ const normalizeCityName = (cityName: string): string => {
     'đà nẵng': 'danang',
     'da nang': 'danang',
     'danang': 'danang',
+    'đà lạt': 'dalat',
+    'da lat': 'dalat',
+    'dalat': 'dalat',
     'phú quốc': 'phuquoc',
     'phu quoc': 'phuquoc',
     'huế': 'hue',
@@ -75,6 +98,9 @@ const cityCodeMap: Record<string, string> = {
   'đà nẵng': 'DAD',
   'da nang': 'DAD',
   'danang': 'DAD',
+  'đà lạt': 'DLI',
+  'da lat': 'DLI',
+  'dalat': 'DLI',
   'phú quốc': 'PQC',
   'phu quoc': 'PQC',
   'huế': 'HUI',
