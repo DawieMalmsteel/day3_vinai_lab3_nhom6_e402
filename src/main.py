@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+import asyncio
+>>>>>>> origin/TranThuongTruongSon
 import logging
 import uuid
 from pathlib import Path
@@ -6,17 +10,24 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+<<<<<<< HEAD
 from google.adk.models.lite_llm import LiteLlm
+=======
+>>>>>>> origin/TranThuongTruongSon
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 from dotenv import load_dotenv
 
+<<<<<<< HEAD
 from agents.chatbot import create_chatbot
 from agents.agent import create_agent_v1
 from agents.agent_v2 import create_agent_v2
 from telemetry.logger import logger
 from telemetry.metrics import metrics, current_trace
+=======
+from agents.agent import TravelAgent
+>>>>>>> origin/TranThuongTruongSon
 
 load_dotenv()
 
@@ -24,10 +35,15 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
+<<<<<<< HEAD
+=======
+logger = logging.getLogger(__name__)
+>>>>>>> origin/TranThuongTruongSon
 
 APP_NAME = "travel_agent"
 session_service = InMemorySessionService()
 
+<<<<<<< HEAD
 MODELS = {
     "openai": lambda: LiteLlm(model="openai/gpt-4o-mini"),
     "gemini": lambda: LiteLlm(model="gemini/gemini-2.0-flash"),
@@ -53,6 +69,9 @@ def get_agent(mode: str, provider: str):
 
 
 app = FastAPI(title="TravelAgent - Multi-Mode")
+=======
+app = FastAPI(title="TravelAgent")
+>>>>>>> origin/TranThuongTruongSon
 
 app.add_middleware(
     CORSMiddleware,
@@ -65,6 +84,7 @@ app.add_middleware(
 STATIC_DIR = Path(__file__).parent / "static"
 
 
+<<<<<<< HEAD
 async def call_agent(
     user_id: str, session_id: str, query: str, mode: str = "v1", provider: str = "openai"
 ) -> str:
@@ -81,6 +101,19 @@ async def call_agent(
     agent = get_agent(mode, provider)
     runner = Runner(
         agent=agent,
+=======
+async def call_agent(user_id: str, session_id: str, query: str) -> str:
+    session = await session_service.get_session(
+        app_name=APP_NAME, user_id=user_id, session_id=session_id
+    )
+    if not session:
+        session = await session_service.create_session(
+            app_name=APP_NAME, user_id=user_id, session_id=session_id
+        )
+
+    runner = Runner(
+        agent=TravelAgent,
+>>>>>>> origin/TranThuongTruongSon
         app_name=APP_NAME,
         session_service=session_service,
     )
@@ -89,7 +122,11 @@ async def call_agent(
     final_response = "Agent không trả về kết quả."
 
     async for event in runner.run_async(
+<<<<<<< HEAD
         user_id=user_id, session_id=effective_session, new_message=content
+=======
+        user_id=user_id, session_id=session_id, new_message=content
+>>>>>>> origin/TranThuongTruongSon
     ):
         if event.is_final_response():
             if event.content and event.content.parts:
@@ -119,6 +156,7 @@ async def chat(request: Request):
     query = body.get("query", "").strip()
     session_id = body.get("session_id", str(uuid.uuid4()))
     user_id = body.get("user_id", "web_user")
+<<<<<<< HEAD
     mode = body.get("mode", "v1")
     provider = body.get("provider", "openai")
 
@@ -185,16 +223,34 @@ async def get_metrics():
 async def get_traces(limit: int = 30):
     """Recent request traces for failure analysis."""
     return {"traces": metrics.get_recent_traces(limit=limit)}
+=======
+
+    if not query:
+        return JSONResponse({"error": "query is required"}, status_code=400)
+
+    logger.info(f"Chat request: user={user_id}, session={session_id}, query={query[:80]}")
+
+    try:
+        response = await call_agent(user_id, session_id, query)
+        return {"response": response, "session_id": session_id}
+    except Exception as e:
+        logger.exception("Agent call failed")
+        return JSONResponse({"error": str(e)}, status_code=500)
+>>>>>>> origin/TranThuongTruongSon
 
 
 @app.get("/api/health")
 async def health():
+<<<<<<< HEAD
     return {
         "status": "ok",
         "agent": "TravelAgent Multi-Mode",
         "modes": list(AGENT_FACTORIES.keys()),
         "providers": list(MODELS.keys()),
     }
+=======
+    return {"status": "ok", "agent": "TravelAgent"}
+>>>>>>> origin/TranThuongTruongSon
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
