@@ -1,11 +1,14 @@
 import { GoogleGenAI, Type, FunctionDeclaration, GenerateContentResponse } from "@google/genai";
 import { debug } from "../utils/debug";
+import { recordLlmMetric, recordToolCall, recordToolResult, recordReasoningStep, measureLatency } from "../utils/metrics";
+import { getCurrentSession } from "../utils/telemetry";
+import { getActiveProviderConfig, MODEL, PROVIDER_LABEL } from "../config/apiProvider";
 
-// Tool Implementations
-// In a real app, this would use fs.readFileSync or an API call to a backend
-// Since we are in a frontend environment, we can't directly read files from disk easily without a backend
-// However, for this demo, we can simulate the "RAG" by fetching the markdown content or having it pre-loaded
-// Given the constraints, I will implement a fetch-based search or a simulated file reader
+// ────────────────────────────── Provider / Model constants ─────────
+export const PROVIDER = PROVIDER_LABEL;
+export { MODEL };
+
+// ────────────────────────────── Tool Implementations ──────────────
 
 const GUIDES: Record<string, string> = {
     "da lat": "dalat.md",
@@ -37,7 +40,7 @@ export const query_knowledge_base = async (location: string, query: string): Pro
 
 export const get_current_date = (): string => {
     const now = new Date();
-    return now.toISOString().split('T')[0]; // Returns YYYY-MM-DD
+    return now.toISOString().split('T')[0];
 };
 
 export const fetch_web_content = async (url: string): Promise<string> => {
@@ -57,7 +60,6 @@ export const fetch_web_content = async (url: string): Promise<string> => {
 
         const doc = new DOMParser().parseFromString(html, 'text/html');
 
-        // Remove unwanted elements
         const removed = doc.querySelectorAll('script, style, nav, header, footer, iframe, noscript, .ads, .sidebar, .menu, .navigation').length;
         doc.querySelectorAll('script, style, nav, header, footer, iframe, noscript, .ads, .sidebar, .menu, .navigation').forEach(el => el.remove());
         debug.log('FETCH_WEB', `Removed ${removed} unwanted elements`);
@@ -80,7 +82,8 @@ export const fetch_web_content = async (url: string): Promise<string> => {
     }
 };
 
-// Function Declarations for Gemini
+// ────────────────────────────── Function Declarations ─────────────
+
 const queryKnowledgeBaseDeclaration: FunctionDeclaration = {
     name: "query_knowledge_base",
     description: "Truy xuất thông tin chi tiết từ cẩm nang du lịch (Markdown) về một địa điểm cụ thể.",
@@ -115,23 +118,18 @@ const fetchWebContentDeclaration: FunctionDeclaration = {
     },
 };
 
-// Gemini Service
-const SHOPAIKEY_BASE_URL = 'https://api.shopaikey.com';
+// ────────────────────────────── Gemini Client ─────────────────────
 
-const getAI = () =>
-    new GoogleGenAI({
-        apiKey: process.env.SHOPAIKEY_API_KEY || process.env.GEMINI_API_KEY || '',
-        httpOptions: {
-            baseUrl: SHOPAIKEY_BASE_URL,
-        },
+const getAI = () => {
+    const { apiKey, baseUrl } = getActiveProviderConfig();
+    return new GoogleGenAI({
+        apiKey,
+        ...(baseUrl ? { httpOptions: { baseUrl } } : {}),
     });
+};
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-/**
- * Validate Gemini response for debugging purposes
- * Checks if response has expected content and warns if no tools were called
- */
 const validateResponse = (response: GenerateContentResponse) => {
     const hasText = !!response.text && response.text.trim().length > 0;
     const hasFunctionCalls = !!response.functionCalls && response.functionCalls.length > 0;
@@ -149,68 +147,131 @@ const validateResponse = (response: GenerateContentResponse) => {
     }
 };
 
-export const chatWithTravelAgent = async (messages: { role: string; parts: { text: string }[] }[], retryCount = 0): Promise<GenerateContentResponse> => {
-    const model = "gemini-2.5-flash";
+// ────────────────────────────── System instructions ───────────────
+
+const AGENT_SYSTEM_INSTRUCTION = `Bạn là một Chuyên gia Tư vấn Du lịch chuyên nghiệp và thông thái.
+Nhiệm vụ của bạn là giúp người dùng lên kế hoạch chuyến đi hoàn hảo nhất.
+
+CÔNG CỤ CỦA BẠN:
+1. 'query_knowledge_base': Truy xuất thông tin từ cẩm nang du lịch nội bộ.
+2. 'get_current_date': Lấy ngày hiện tại để tính toán lịch trình chính xác.
+3. 'googleSearch': Tìm kiếm thông tin thời gian thực (giá vé, thời tiết, review).
+4. 'fetch_web_content': Đọc nội dung chi tiết từ URL cụ thể (blog, review, cẩm nang).
+
+⚠️ QUAN TRỌNG - QUY TẮC GỌI TOOLS (BẮT BUỘC):
+- LUÔN cố gắng gọi ít nhất 1 tool cho MỖI request của người dùng. Đừng bao giờ bỏ qua bước này!
+- Nếu người dùng hỏi về địa điểm cụ thể → gọi 'query_knowledge_base' trước
+- Nếu cần thông tin thời gian thực (giá, thời tiết, review mới) → gọi 'googleSearch' hoặc 'fetch_web_content'
+- Nếu hỏi về lịch trình/ngày giờ → gọi 'get_current_date' đầu tiên
+- Gọi tools KHÔNG PHẢI tuỳ chọn - đó là BƯỚC BẮT BUỘC trong quy trình của bạn!
+
+QUY TRÌNH LÀM VIỆC:
+1. Đọc request người dùng cẩn thận
+2. Quyết định tool nào cần gọi (LUÔN có ít nhất 1 tool)
+3. Gọi tool đó
+4. Dùng kết quả từ tool để trả lời chi tiết
+5. Thêm links/URL từ kết quả để người dùng có thể hành động
+- QUAN TRỌNG: Hãy LUÔN kèm theo link (URL) cho các khách sạn, chuyến bay hoặc địa điểm tham quan mà bạn tìm thấy từ Google Search hoặc cẩm nang để người dùng có thể đặt chỗ trực tiếp. Trình bày link dưới dạng Markdown [Tên khách sạn](URL).
+- Luôn trả lời bằng tiếng Việt, trình bày đẹp mắt bằng Markdown.`;
+
+const CHATBOT_SYSTEM_INSTRUCTION = `Bạn là một Chuyên gia Tư vấn Du lịch chuyên nghiệp và thông thái.
+Nhiệm vụ của bạn là giúp người dùng lên kế hoạch chuyến đi hoàn hảo nhất.
+
+Hãy trả lời trực tiếp dựa trên kiến thức có sẵn của bạn.
+KHÔNG gọi bất kỳ tool/function nào. Trả lời thuần text.
+Luôn trả lời bằng tiếng Việt, trình bày đẹp mắt bằng Markdown.`;
+
+// ────────────────────────────── Step counter (module-level) ───────
+
+let _stepCounter = 0;
+
+export function resetStepCounter(): void {
+  _stepCounter = 0;
+}
+
+export function getStepCount(): number {
+  return _stepCounter;
+}
+
+// ────────────────────────────── Chat with model ──────────────────
+
+/**
+ * Gọi model.
+ * @param mode - 'chatbot' (không tool) hoặc 'agent' (có tool + ReAct loop)
+ */
+export const chatWithTravelAgent = async (
+  messages: { role: string; parts: any[] }[],
+  mode: 'chatbot' | 'agent' = 'agent',
+  retryCount = 0,
+): Promise<GenerateContentResponse> => {
     const MAX_RETRIES = 3;
 
-    debug.log('GEMINI', `Calling model: ${model}`, {
+    _stepCounter++;
+
+    debug.log('GEMINI', `[${mode}] Calling model: ${MODEL} (step ${_stepCounter})`, {
         messageCount: messages.length,
         retryCount,
         lastMessageRole: messages[messages.length - 1]?.role,
     });
 
+    const startTime = Date.now();
+
     try {
         const ai = getAI();
+
+        // Chatbot mode: không truyền tools → model không thể gọi function
+        const isChatbot = mode === 'chatbot';
+
+        const config: any = {
+            systemInstruction: isChatbot ? CHATBOT_SYSTEM_INSTRUCTION : AGENT_SYSTEM_INSTRUCTION,
+        };
+
+        if (!isChatbot) {
+            config.tools = [
+                { googleSearch: {} },
+                { functionDeclarations: [queryKnowledgeBaseDeclaration, getCurrentDateDeclaration, fetchWebContentDeclaration] },
+            ];
+            config.toolConfig = { includeServerSideToolInvocations: true };
+        }
+
         const response = await ai.models.generateContent({
-            model : model,
+            model: MODEL,
             contents: messages,
-            config: {
-                systemInstruction: `Bạn là một Chuyên gia Tư vấn Du lịch chuyên nghiệp và thông thái. 
-        Nhiệm vụ của bạn là giúp người dùng lên kế hoạch chuyến đi hoàn hảo nhất.
-        
-        CÔNG CỤ CỦA BẠN:
-        1. 'query_knowledge_base': Truy xuất thông tin từ cẩm nang du lịch nội bộ.
-        2. 'get_current_date': Lấy ngày hiện tại để tính toán lịch trình chính xác.
-        3. 'googleSearch': Tìm kiếm thông tin thời gian thực (giá vé, thời tiết, review).
-        4. 'fetch_web_content': Đọc nội dung chi tiết từ URL cụ thể (blog, review, cẩm nang).
-        
-        ⚠️ QUAN TRỌNG - QUY TẮC GỌI TOOLS (BẮT BUỘC):
-        - LUÔN cố gắng gọi ít nhất 1 tool cho MỖI request của người dùng. Đừng bao giờ bỏ qua bước này!
-        - Nếu người dùng hỏi về địa điểm cụ thể → gọi 'query_knowledge_base' trước
-        - Nếu cần thông tin thời gian thực (giá, thời tiết, review mới) → gọi 'googleSearch' hoặc 'fetch_web_content'
-        - Nếu hỏi về lịch trình/ngày giờ → gọi 'get_current_date' đầu tiên
-        - Gọi tools KHÔNG PHẢI tuỳ chọn - đó là BƯỚC BẮT BUỘC trong quy trình của bạn!
-        
-        QUY TRÌNH LÀM VIỆC:
-        1. Đọc request người dùng cẩn thận
-        2. Quyết định tool nào cần gọi (LUÔN có ít nhất 1 tool)
-        3. Gọi tool đó
-        4. Dùng kết quả từ tool để trả lời chi tiết
-        5. Thêm links/URL từ kết quả để người dùng có thể hành động
-        - QUAN TRỌNG: Hãy LUÔN kèm theo link (URL) cho các khách sạn, chuyến bay hoặc địa điểm tham quan mà bạn tìm thấy từ Google Search hoặc cẩm nang để người dùng có thể đặt chỗ trực tiếp. Trình bày link dưới dạng Markdown [Tên khách sạn](URL).
-        - Luôn trả lời bằng tiếng Việt, trình bày đẹp mắt bằng Markdown.`,
-                tools: [
-                    { googleSearch: {} },
-                    { functionDeclarations: [queryKnowledgeBaseDeclaration, getCurrentDateDeclaration, fetchWebContentDeclaration] }
-                ],
-                toolConfig: { includeServerSideToolInvocations: true }
-            },
+            config,
         });
 
-        debug.success('GEMINI', `Model response received`, {
+        const latencyMs = measureLatency(startTime);
+
+        debug.success('GEMINI', `Model response received (${latencyMs}ms)`, {
             textLength: response.text?.length || 0,
             functionCallCount: response.functionCalls?.length || 0,
             functionNames: response.functionCalls?.map(f => f.name) || [],
         });
 
-        // Validate response for debugging
         validateResponse(response);
+
+        // ── Ghi LLM_METRIC ──
+        const session = getCurrentSession();
+        if (session) {
+            const label = session.label as 'chatbot' | 'agent';
+            recordLlmMetric(label, _stepCounter, response, latencyMs, PROVIDER, MODEL, _stepCounter);
+
+            // Nếu là agent và response có text → ghi reasoning step
+            if (label === 'agent' && response.text) {
+                const fnNames = response.functionCalls?.map(f => f.name).join(', ');
+                recordReasoningStep(
+                    _stepCounter,
+                    response.text.slice(0, 500),
+                    response.text.slice(0, 150),
+                    fnNames || undefined,
+                );
+            }
+        }
 
         return response;
     } catch (error: any) {
         debug.error(`GEMINI`, `Attempt ${retryCount + 1} failed`, error);
 
-        // Check for rate limit (429) or transient errors (500, 503)
         const isRateLimit = error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED";
         const isTransient = error?.message?.includes("500") || error?.message?.includes("503") || error?.message?.includes("xhr error");
 
@@ -218,12 +279,14 @@ export const chatWithTravelAgent = async (messages: { role: string; parts: { tex
             const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 1000;
             debug.warn('GEMINI', `Retrying in ${delay}ms...`, { isRateLimit, isTransient });
             await sleep(delay);
-            return chatWithTravelAgent(messages, retryCount + 1);
+            return chatWithTravelAgent(messages, mode, retryCount + 1);
         }
 
         throw error;
     }
 };
+
+// ────────────────────────────── Handle Tool Calls ─────────────────
 
 export const handleToolCalls = async (response: GenerateContentResponse) => {
     const functionCalls = response.functionCalls;
@@ -239,42 +302,49 @@ export const handleToolCalls = async (response: GenerateContentResponse) => {
     for (const call of functionCalls) {
         debug.log('TOOL_HANDLER', `Processing tool: ${call.name}`, call.args);
 
-        if (call.name === "query_knowledge_base") {
-            const { location, query } = call.args as any;
-            debug.log('TOOL_HANDLER', `Querying knowledge base for: ${location}`);
-            const content = await query_knowledge_base(location, query);
-            results.push({
-                functionResponse: {
-                    name: "query_knowledge_base",
-                    response: { content },
-                    id: call.id
-                }
-            });
-            debug.success('TOOL_HANDLER', `Knowledge base query completed (${content.length} chars)`);
-        } else if (call.name === "get_current_date") {
-            debug.log('TOOL_HANDLER', 'Getting current date');
-            const date = get_current_date();
-            results.push({
-                functionResponse: {
-                    name: "get_current_date",
-                    response: { content: date },
-                    id: call.id
-                }
-            });
-            debug.success('TOOL_HANDLER', `Current date: ${date}`);
-        } else if (call.name === "fetch_web_content") {
-            const { url } = call.args as any;
-            debug.log('TOOL_HANDLER', `Fetching web content from: ${url}`);
-            const content = await fetch_web_content(url);
-            results.push({
-                functionResponse: {
-                    name: "fetch_web_content",
-                    response: { content },
-                    id: call.id
-                }
-            });
-            debug.success('TOOL_HANDLER', `Web content fetched (${content.length} chars)`);
+        // ── Ghi TOOL_CALL event ──
+        const toolName = call.name ?? 'unknown';
+        recordToolCall(_stepCounter, toolName, (call.args as Record<string, any>) ?? {});
+
+        const toolStart = Date.now();
+        let success = true;
+        let resultContent = '';
+
+        try {
+            if (call.name === "query_knowledge_base") {
+                const { location, query } = call.args as any;
+                debug.log('TOOL_HANDLER', `Querying knowledge base for: ${location}`);
+                resultContent = await query_knowledge_base(location, query);
+            } else if (call.name === "get_current_date") {
+                debug.log('TOOL_HANDLER', 'Getting current date');
+                resultContent = get_current_date();
+            } else if (call.name === "fetch_web_content") {
+                const { url } = call.args as any;
+                debug.log('TOOL_HANDLER', `Fetching web content from: ${url}`);
+                resultContent = await fetch_web_content(url);
+            } else {
+                resultContent = `Unknown tool: ${call.name}`;
+                success = false;
+            }
+        } catch (err: any) {
+            resultContent = `Error: ${err?.message ?? 'unknown'}`;
+            success = false;
         }
+
+        const toolDuration = measureLatency(toolStart);
+
+        // ── Ghi TOOL_RESULT event ──
+        recordToolResult(_stepCounter, toolName, success, toolDuration, resultContent);
+
+        results.push({
+            functionResponse: {
+                name: call.name,
+                response: { content: resultContent },
+                id: call.id,
+            },
+        });
+
+        debug.success('TOOL_HANDLER', `${call.name} completed (${toolDuration}ms, ${resultContent.length} chars)`);
     }
 
     debug.success('TOOL_HANDLER', `All ${results.length} tool results prepared`);
