@@ -1,5 +1,5 @@
 import { debug } from '../utils/debug';
-import { getCurrentDateFormatted } from '../utils/dateUtils';
+import { getCurrentDateFormatted, convertToGoogleFlightsFormat } from '../utils/dateUtils';
 import { getFlightPrices, generateGoogleFlightsLink, generateAirlineBookingLinks } from './googleFlightsService';
 import type { PriceComparisonResult, FlightPrice } from '../types';
 
@@ -144,7 +144,8 @@ export const extractPriceComparisonDetails = (message: string): {
  * Compare flight prices using Google Flights scraper
  */
 export const comparePrices = async (origin: string, destination: string, date?: string): Promise<PriceComparisonResult> => {
-  const finalDate = date || getCurrentDateFormatted();
+  // Convert date to YYYY-MM-DD format for Google Flights API
+  const finalDate = convertToGoogleFlightsFormat(date);
   debug.log('PRICE_COMPARISON', `Comparing prices for ${origin} → ${destination}`, finalDate);
 
   try {

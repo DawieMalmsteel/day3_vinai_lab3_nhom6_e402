@@ -1,5 +1,3 @@
-import { debug } from '../utils/debug';
-
 /**
  * Get current date in DD/MM/YYYY format (Vietnam locale)
  */
@@ -10,6 +8,88 @@ export const getCurrentDateFormatted = (): string => {
   const year = now.getFullYear();
   return `${day}/${month}/${year}`;
 };
+
+/**
+ * Convert date string to YYYY-MM-DD format (required by Google Flights API)
+ * Supports: DD/MM/YYYY, vague dates (sớm nhất, hôm nay, ngày mai, etc)
+ */
+export const convertToGoogleFlightsFormat = (dateStr: string | undefined): string => {
+  if (!dateStr) {
+    return getTodayInGoogleFormat();
+  }
+
+  const lowerDate = dateStr.toLowerCase().trim();
+
+  // Handle vague date expressions
+  if (lowerDate.includes('sớm nhất') || lowerDate.includes('soon')) {
+    return getTodayInGoogleFormat(); // Today for earliest
+  }
+  if (lowerDate.includes('hôm nay') || lowerDate.includes('today')) {
+    return getTodayInGoogleFormat();
+  }
+  if (lowerDate.includes('ngày mai') || lowerDate.includes('tomorrow')) {
+    return getTomorrowInGoogleFormat();
+  }
+  if (lowerDate.includes('tuần tới') || lowerDate.includes('next week')) {
+    return getDateInGoogleFormat(7);
+  }
+  if (lowerDate.includes('tháng tới') || lowerDate.includes('next month')) {
+    return getDateInGoogleFormat(30);
+  }
+
+  // Try to parse DD/MM/YYYY format
+  const datePattern = /(\d{1,2})\/(\d{1,2})\/(\d{4})/;
+  const match = dateStr.match(datePattern);
+  if (match) {
+    const day = String(parseInt(match[1], 10)).padStart(2, '0');
+    const month = String(parseInt(match[2], 10)).padStart(2, '0');
+    const year = match[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  // If already YYYY-MM-DD format, return as is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+
+  // Default to today
+  return getTodayInGoogleFormat();
+};
+
+/**
+ * Get today's date in YYYY-MM-DD format
+ */
+function getTodayInGoogleFormat(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Get tomorrow's date in YYYY-MM-DD format
+ */
+function getTomorrowInGoogleFormat(): string {
+  const now = new Date();
+  now.setDate(now.getDate() + 1);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Get date N days from today in YYYY-MM-DD format
+ */
+function getDateInGoogleFormat(daysFromNow: number): string {
+  const now = new Date();
+  now.setDate(now.getDate() + daysFromNow);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 /**
  * Get date after N days in DD/MM/YYYY format
