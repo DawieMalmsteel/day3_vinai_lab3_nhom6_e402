@@ -121,8 +121,8 @@ const getCityCode = (cityName: string): string => {
 };
 
 /**
- * Scrape Google Flights for real-time prices
- * Note: This is a simplified simulation. Actual scraping would need Puppeteer in production
+ * Scrape Google Flights via backend API
+ * Calls /api/flights/search endpoint which uses Puppeteer for real-time scraping
  */
 export const scrapeGoogleFlights = async (
   origin: string,
@@ -135,34 +135,39 @@ export const scrapeGoogleFlights = async (
   const destCode = getCityCode(destination);
 
   debug.group(`Scraping Google Flights: ${originCode} → ${destCode} on ${date}`);
-  debug.log('GOOGLE_FLIGHTS', 'Starting scrape attempt', { originCode, destCode, date, retryCount });
+  debug.log('GOOGLE_FLIGHTS', 'Calling backend API', { originCode, destCode, date, retryCount });
 
   try {
-    // Simulate scraping with delay (in production, use real Puppeteer)
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+    const apiUrl = new URL('/api/flights/search', process.env.VITE_API_BASE_URL || 'http://localhost:3001');
+    apiUrl.searchParams.append('origin', origin);
+    apiUrl.searchParams.append('destination', destination);
+    apiUrl.searchParams.append('date', date);
 
-    // In production, construct real Google Flights URL and scrape:
-    // const url = `https://www.google.com/flights/explore?explore=true_ORD%7E${destCode}&curr=USD`;
-    
-    // For MVP, we'll simulate with mock data + some variation
-    const routeKey = `${origin}-${destination}`.toLowerCase();
-    let flights = mockFlightDatabase[routeKey];
+    const response = await fetch(apiUrl.toString(), {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-    if (!flights) {
-      // Generate random prices for unmapped routes
-      const basePrice = Math.floor(Math.random() * 500000) + 300000;
-      flights = [
-        { airline: 'Vietnam Airlines', price: basePrice + 200000, departureTime: '07:00', arrivalTime: '09:00', duration: '2h', rating: 4.8 },
-        { airline: 'Vietjet', price: basePrice - 100000, departureTime: '10:00', arrivalTime: '12:00', duration: '2h', rating: 4.2 },
-        { airline: 'Bamboo Airways', price: basePrice, departureTime: '14:00', arrivalTime: '16:00', duration: '2h', rating: 4.7 },
-      ];
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API Error (${response.status}): ${errorText}`);
     }
 
-    debug.success('GOOGLE_FLIGHTS', `Successfully scraped ${flights.length} flights`);
+    const data = await response.json();
+
+    if (data.success && data.flights && data.flights.length > 0) {
+      debug.success('GOOGLE_FLIGHTS', `Successfully fetched ${data.flights.length} flights from ${data.source}`);
+      debug.groupEnd();
+      return data.flights;
+    }
+
+    debug.warn('GOOGLE_FLIGHTS', 'API returned no flights');
     debug.groupEnd();
-    return flights;
+    return null;
   } catch (error: any) {
-    debug.error('GOOGLE_FLIGHTS', `Scrape attempt ${retryCount + 1} failed`, error);
+    debug.error('GOOGLE_FLIGHTS', `API call attempt ${retryCount + 1} failed`, error);
 
     // Retry with backoff
     if (retryCount < MAX_RETRIES) {
