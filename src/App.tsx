@@ -3,7 +3,7 @@ import { Send, Plane, Hotel, MapPin, Compass, Loader2, User, Bot, Sparkles, Chev
 import Markdown from 'react-markdown';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { chatWithTravelAgent } from './services/agent';
+import { chatWithTravelAgent, handleToolCalls } from './services/agent';
 import { debug } from './utils/debug';
 
 function cn(...inputs: ClassValue[]) {
@@ -56,7 +56,42 @@ export default function App() {
 
       let response = await chatWithTravelAgent(chatHistory);
       debug.log('APP', 'Initial response received from model');
-      
+
+      // Handle potential tool calls (ReAct loop)
+      let toolResults = await handleToolCalls(response);
+      let cycleCount = 0;
+
+      while (toolResults) {
+        cycleCount++;
+        debug.log('APP', `ReAct cycle ${cycleCount}: Tool calls detected`, {
+          toolCount: toolResults.length,
+          tools: toolResults.map(r => r.functionResponse.name),
+        });
+
+        // Show what the agent is doing in the UI
+        const toolNames = toolResults.map(r => r.functionResponse.name).join(', ');
+        setMessages(prev => [...prev, { 
+          role: 'model', 
+          text: `*Đang tìm kiếm thông tin (${toolNames})...*`,
+          isPlanning: true 
+        }]);
+
+        // Add tool results to history
+        chatHistory.push(response.candidates![0].content as any);
+        chatHistory.push({
+          role: 'user',
+          parts: toolResults as any
+        });
+
+        debug.log('APP', `Calling model again with tool results (cycle ${cycleCount})`);
+
+        // Call model again with tool results
+        response = await chatWithTravelAgent(chatHistory);
+        toolResults = await handleToolCalls(response);
+        
+        // Remove the "planning" message
+        setMessages(prev => prev.filter(m => !m.isPlanning));
+      }
 
       const modelText = response.text || "Xin lỗi, tôi gặp sự cố khi xử lý yêu cầu của bạn.";
       
