@@ -64,6 +64,63 @@ const ALLOWED_TOPICS = {
   ],
 };
 
+const GREETING_KEYWORDS = [
+  'xin chao',
+  'xin chào',
+  'chao',
+  'chào',
+  'hello',
+  'hi',
+  'hey',
+  'alo',
+];
+
+const TRAVEL_INTENT_KEYWORDS = [
+  'du lịch',
+  'đi chơi',
+  'kỳ nghỉ',
+  'nghỉ dưỡng',
+  'trip',
+  'vacation',
+  'tour',
+  'booking',
+  'book',
+  'đặt',
+  'lịch trình',
+  'itinerary',
+  'từ',
+  'đến',
+  'from',
+  'to',
+  'khởi hành',
+  'đi đâu',
+  'đi như nào',
+  'di chuyển',
+  'tham quan',
+  'khám phá',
+  'check-in',
+  'resort',
+  'sân bay',
+  'ga',
+  'bến xe',
+  'đà lạt',
+  'da lat',
+  'đà nẵng',
+  'da nang',
+  'phú quốc',
+  'phu quoc',
+  'hà nội',
+  'ha noi',
+  'hồ chí minh',
+  'ho chi minh',
+  'sài gòn',
+  'saigon',
+  'nha trang',
+  'huế',
+  'hue',
+  'sapa',
+];
+
 // Out-of-scope topic examples
 const BLOCKED_TOPICS = [
   'nhà hàng',
@@ -90,47 +147,85 @@ const BLOCKED_TOPICS = [
   'relationship',
 ];
 
+const normalizeText = (text: string): string => text.toLowerCase().trim();
+
+const countKeywordMatches = (message: string, keywords: string[]): number => {
+  let count = 0;
+  for (const keyword of keywords) {
+    if (message.includes(keyword)) {
+      count += 1;
+    }
+  }
+  return count;
+};
+
 /**
  * Check if message is about allowed topics
  */
 export const isValidTopic = (message: string): boolean => {
-  const lowerMsg = message.toLowerCase();
+  const lowerMsg = normalizeText(message);
+  if (!lowerMsg) return false;
 
-  // Check if any blocked topic appears
-  for (const blocked of BLOCKED_TOPICS) {
-    if (lowerMsg.includes(blocked)) {
-      debug.warn('FILTER', `Blocked topic detected: ${blocked}`);
-      return false;
-    }
-  }
-
-  // Check if any allowed topic appears
+  const blockedMatches = BLOCKED_TOPICS.filter((blocked) => lowerMsg.includes(blocked));
+  let allowedMatches = 0;
   for (const category of Object.values(ALLOWED_TOPICS)) {
-    for (const keyword of category) {
-      if (lowerMsg.includes(keyword)) {
-        debug.log('FILTER', `Valid topic detected: ${keyword}`);
-        return true;
-      }
-    }
+    allowedMatches += countKeywordMatches(lowerMsg, category);
+  }
+  const travelIntentMatches = countKeywordMatches(lowerMsg, TRAVEL_INTENT_KEYWORDS);
+  const greetingMatches = countKeywordMatches(lowerMsg, GREETING_KEYWORDS);
+
+  const hasAllowedSignal = allowedMatches > 0;
+  const hasTravelSignal = travelIntentMatches > 0;
+  const hasGreetingSignal = greetingMatches > 0;
+  const hasBlockedSignal = blockedMatches.length > 0;
+
+  // Less strict: greeting is allowed unless it is clearly about blocked topics.
+  if (hasGreetingSignal && !hasBlockedSignal) {
+    debug.log('FILTER', 'Greeting detected and accepted');
+    return true;
   }
 
-  // If no keywords matched, consider as invalid
-  debug.warn('FILTER', 'No valid topic keywords found');
-  return false;
+  // Primary rule: if there is any travel/allowed signal, allow it.
+  if (hasAllowedSignal || hasTravelSignal) {
+    if (hasBlockedSignal) {
+      debug.warn('FILTER', 'Mixed topic detected, but travel signal exists. Allowing message.', {
+        blockedMatches,
+        allowedMatches,
+        travelIntentMatches,
+      });
+    } else {
+      debug.log('FILTER', 'Travel signal detected and accepted', {
+        allowedMatches,
+        travelIntentMatches,
+      });
+    }
+    return true;
+  }
+
+  // Out-of-scope only when blocked signal is clear and no travel signal.
+  if (hasBlockedSignal) {
+    debug.warn('FILTER', `Blocked topic detected: ${blockedMatches.join(', ')}`);
+    return false;
+  }
+
+  // Less strict fallback: allow neutral/ambiguous prompts to let systemInstruction handle intent.
+  debug.log('FILTER', 'No explicit keyword matched. Allowing neutral message to reduce strictness.');
+  return true;
 };
 
 /**
  * Get out-of-scope response message
  */
 export const getOutOfScopeMessage = (): string => {
-  return `Xin lỗi! Tôi chỉ hỗ trợ về các chủ đề sau:
+  return `Mình chưa hỗ trợ sâu chủ đề này, nhưng rất sẵn sàng giúp bạn phần du lịch nhé 😊
 
-✈️ **Chuyến bay** - Tìm vé, so sánh giá, đặt chuyến
-🚌 **Xe bus** - Các tuyến xe, giá vé, đặt vé
-🏨 **Khách sạn** - Tìm phòng, so sánh, đặt phòng
-📍 **Địa điểm du lịch** - Cẩm nang, lịch trình, địa điểm tham quan
+Mình hỗ trợ tốt nhất ở:
+✈️ **Chuyến bay** - Tìm vé, so sánh, link đặt
+🚌 **Xe bus/Xe khách** - Tuyến đi, giá vé, link đặt
+🏨 **Khách sạn** - Gợi ý nơi ở theo ngân sách/vị trí
+📍 **Cẩm nang du lịch** - Lịch trình, điểm tham quan, mẹo di chuyển
 
-Bạn muốn tìm chuyến bay, xe bus, khách sạn hoặc thông tin du lịch nào?`;
+Bạn muốn bắt đầu từ điểm đến nào để mình gợi ý nhanh cho bạn?`;
 };
 
 /**
