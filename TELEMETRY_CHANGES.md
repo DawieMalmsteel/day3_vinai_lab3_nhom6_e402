@@ -1,72 +1,113 @@
-# Telemetry & Cost Comparison — Thay đổi và triển khai
+# Báo cáo thay đổi — Telemetry, Log & So sánh chi phí
 
-> Dựa trên handoff: `HANDOFF_API_PROVIDER.md`
-
----
-
-## Tổng quan
-
-Bổ sung hệ thống **structured logging (JSONL)** và **bảng so sánh chi phí Chatbot vs Agent** vào repo Travel Agent.  
-Toàn bộ chạy trên **browser** (không dùng `fs`/`path` Node.js).
+> Dựa trên: `HANDOFF_API_PROVIDER.md`  
+> Ngày thực hiện: 2026-04-06
 
 ---
 
-## Danh sách file thay đổi
+## 1. Mục tiêu
 
-| File | Trạng thái | Mô tả |
-|---|---|---|
-| `src/utils/telemetry.ts` | **Viết lại** | Core logger browser-compatible |
-| `src/utils/pricing.ts` | **Tạo mới** | Bảng giá API theo provider/model |
-| `src/utils/metrics.ts` | **Tạo mới** | Bóc tách usage, tính cost, ghi LLM_METRIC |
-| `src/utils/comparison.ts` | **Tạo mới** | Tổng hợp và so sánh Chatbot vs Agent |
-| `src/services/gemini.ts` | **Sửa** | Hook telemetry vào model call + tool handling |
-| `src/App.tsx` | **Sửa** | Thêm mode toggle, session management, UI panel |
+Bổ sung vào repo **AI Travel Agent** ba khả năng:
+
+1. **Structured logging (JSONL)** — ghi log theo format chuẩn, tự động lưu file vào `logs/`
+2. **Tính chi phí API** — `estimated_cost_usd` cho mỗi lần gọi model
+3. **Bảng so sánh Chatbot vs Agent** — xuất file `.md` + `.json` để nộp báo cáo
 
 ---
 
-## Chi tiết từng file
+## 2. Tổng quan file thay đổi
 
-### `src/utils/telemetry.ts` — Viết lại hoàn toàn
+```
+src/
+├── config/
+│   └── apiProvider.ts        ← [MỚI] Chọn provider: Google trực tiếp hoặc ShopAIKey
+├── utils/
+│   ├── telemetry.ts          ← [VIẾT LẠI] Core logger + tự ghi file qua server
+│   ├── pricing.ts            ← [MỚI] Bảng giá API tách riêng
+│   ├── metrics.ts            ← [MỚI] Bóc tách token, tính cost, ghi LLM_METRIC
+│   ├── comparison.ts         ← [MỚI] Tổng hợp & bảng so sánh Chatbot vs Agent
+│   └── debug.ts              ← (không đổi)
+├── services/
+│   └── gemini.ts             ← [SỬA] Hook telemetry, tách mode chatbot/agent
+├── App.tsx                   ← [SỬA] UI toggle mode, panel Telemetry
+server/
+│   └── vite-plugin-logger.ts ← [MỚI] Plugin Vite tự ghi file vào logs/
+vite.config.ts                ← [SỬA] Thêm plugin logger
+.env                          ← [SỬA] Tách key Google vs ShopAIKey
+.gitignore                    ← [SỬA] Ignore nội dung logs/
+logs/                         ← [MỚI] Thư mục chứa file log tự sinh
+```
 
-File cũ dùng `import * as fs from 'fs'` và `import * as path from 'path'` — **không chạy được trên browser**.
+---
 
-**Hàm đã thêm / thay đổi:**
+## 3. Chi tiết từng thay đổi
 
-| Hàm | Mô tả |
+---
+
+### 3.1 `src/config/apiProvider.ts` — MỚI
+
+**Vấn đề trước đó:** API key và base URL bị hard-code trong `gemini.ts`, muốn đổi provider phải sửa code.
+
+**Giải pháp:** Tạo file config trung tâm, chỉ cần đổi 1 dòng:
+
+```ts
+// Đổi giữa 2 provider:
+export const ACTIVE_PROVIDER: ApiProvider = 'shopaikey';  // hoặc 'google'
+```
+
+| Hàm / Hằng số | Vai trò |
 |---|---|
-| `createSessionId()` | Tạo ID duy nhất cho mỗi session: `sess_<timestamp>_<random>` |
-| `startSessionLog(label, query, provider, model)` | Khởi tạo session mới, ghi event `CHATBOT_START` hoặc `AGENT_START` |
-| `getCurrentSession()` | Trả về session đang chạy |
-| `getCompletedSessions()` | Trả về danh sách tất cả session đã kết thúc |
-| `logEvent(event, data)` | Ghi 1 dòng JSON vào memory + pretty-print màu lên console |
-| `endSession(finalAnswer, extraData)` | Kết thúc session, ghi `CHATBOT_END` / `AGENT_SUCCESS`, archive vào `completedSessions` |
-| `logError(label, step, errorType, message)` | Ghi event `ERROR` với phân loại lỗi |
-| `exportSessionLogJsonl(session?)` | Download file `.jsonl` (1 JSON object mỗi dòng) |
-| `exportSessionLogJson(session?)` | Download file `.json` (pretty-printed) |
-| `getSessionJsonl(session?)` | Trả về toàn bộ log dạng JSONL string (dùng cho UI hiển thị) |
+| `ACTIVE_PROVIDER` | Provider đang dùng (`'google'` hoặc `'shopaikey'`) |
+| `MODEL` | Tên model (`'gemini-2.5-flash'`) |
+| `PROVIDER_LABEL` | Nhãn ghi vào log (`'google'`) |
+| `getActiveProviderConfig()` | Trả về `{ apiKey, baseUrl }` cho provider đang active |
 
-**Đặc điểm:**
-- Mỗi event có đủ `timestamp`, `event`, `data` theo schema handoff
-- Console log dùng màu khác nhau cho từng loại event (xanh, tím, vàng, đỏ...)
-- Download qua `Blob` + `URL.createObjectURL` — không cần server
+Tương ứng trong `.env`:
+
+```env
+GEMINI_API_KEY="AIzaSy..."                                    # Google trực tiếp
+SHOPAIKEY_API_KEY="sk-7FIq..."                                # ShopAIKey proxy
+```
 
 ---
 
-### `src/utils/pricing.ts` — Tạo mới
+### 3.2 `src/utils/telemetry.ts` — VIẾT LẠI
 
-Bảng giá tách riêng, **không hard-code vào UI** theo yêu cầu handoff.
+**Vấn đề trước đó:** File cũ dùng `fs` + `path` (Node.js) — không chạy được trên browser. Log chỉ nằm trong console, không lưu file.
 
-**Hàm:**
+**Giải pháp:** Viết lại hoàn toàn cho browser. Log lưu trong memory, đồng thời tự POST lên Vite dev server để ghi file.
 
-| Hàm | Mô tả |
+**Luồng hoạt động của mỗi event:**
+
+```
+logEvent("LLM_METRIC", {...})
+  │
+  ├─ 1. Lưu vào mảng currentSession.events[]     (memory)
+  ├─ 2. console.log() có màu theo loại event      (DevTools)
+  └─ 3. POST /api/log/event → server ghi file     (logs/*.jsonl)
+```
+
+| Hàm | Vai trò |
 |---|---|
-| `getPricingConfig(provider, model)` | Tra bảng giá theo `provider` + `model`, trả `null` nếu không tìm thấy |
-| `calculateEstimatedCost(promptTokens, completionTokens, pricingConfig, toolUseTokens?)` | Tính `estimated_cost_usd` theo công thức: `(tokens / 1_000_000) * price_per_1m` |
-| `formatCost(costUsd)` | Format thành chuỗi `$0.000123` |
+| `createSessionId()` | Tạo ID: `sess_1712345678_a1b2c3` |
+| `startSessionLog(label, query, provider, model)` | Mở session mới, ghi `CHATBOT_START` hoặc `AGENT_START` |
+| `logEvent(event, data)` | Ghi 1 event vào memory + console + server |
+| `endSession(finalAnswer, extraData)` | Đóng session, ghi event kết thúc, gửi toàn bộ session lên server |
+| `logError(label, step, errorType, message)` | Ghi event `ERROR` |
+| `saveSessionToServer(session)` | POST `/api/log/session` → server ghi `.jsonl` + `.json` |
+| `saveComparisonToServer(summary, markdown)` | POST `/api/log/compare` → server ghi `.md` + `.json` |
+| `exportSessionLogJsonl(session?)` | Download `.jsonl` qua browser |
+| `getSessionJsonl(session?)` | Trả JSONL string cho UI panel |
 
-**Bảng giá hiện có:**
+---
 
-| Provider | Model | Input ($/1M) | Output ($/1M) |
+### 3.3 `src/utils/pricing.ts` — MỚI
+
+**Vai trò:** Bảng giá tách riêng, không hard-code vào UI (theo yêu cầu handoff).
+
+**Bảng giá:**
+
+| Provider | Model | Input ($/1M tokens) | Output ($/1M tokens) |
 |---|---|---:|---:|
 | google | gemini-2.5-flash | $0.075 | $0.30 |
 | google | gemini-2.0-flash | $0.075 | $0.30 |
@@ -74,24 +115,37 @@ Bảng giá tách riêng, **không hard-code vào UI** theo yêu cầu handoff.
 | openai | gpt-4o | $5.00 | $15.00 |
 | anthropic | claude-3-sonnet | $3.00 | $15.00 |
 
+**Công thức:**
+
+```
+estimated_cost_usd =
+  (prompt_tokens / 1,000,000) × input_price +
+  (completion_tokens / 1,000,000) × output_price
+```
+
+| Hàm | Vai trò |
+|---|---|
+| `getPricingConfig(provider, model)` | Tra bảng giá, trả `null` nếu chưa có |
+| `calculateEstimatedCost(prompt, completion, pricing, toolUse?)` | Tính `estimated_cost_usd` |
+| `formatCost(costUsd)` | Định dạng `$0.000123` |
+
 ---
 
-### `src/utils/metrics.ts` — Tạo mới
+### 3.4 `src/utils/metrics.ts` — MỚI
 
-Bóc tách usage từ Gemini response và ghi event telemetry.
+**Vai trò:** Bóc tách token usage từ Gemini response, tính cost, và ghi các event telemetry chuyên biệt.
 
-**Hàm:**
-
-| Hàm | Mô tả |
+| Hàm | Vai trò |
 |---|---|
-| `extractUsageMetrics(response)` | Bóc tách `prompt_tokens`, `completion_tokens`, `tool_use_prompt_tokens`, `total_tokens` từ `response.usageMetadata` |
-| `measureLatency(startMs, endMs?)` | Tính `latency_ms = endMs - startMs` |
-| `recordLlmMetric(label, step, response, latencyMs, provider, model, requestIndex?)` | Gọi `extractUsageMetrics` + `calculateEstimatedCost` + ghi event `LLM_METRIC` |
-| `recordReasoningStep(step, rawContent, thoughtPreview?, actionName?)` | Ghi event `AGENT_REASONING_STEP` |
-| `recordToolCall(step, toolName, args)` | Ghi event `TOOL_CALL` |
-| `recordToolResult(step, toolName, success, durationMs, resultPreview)` | Ghi event `TOOL_RESULT` |
+| `extractUsageMetrics(response)` | Đọc `usageMetadata` từ response → `{ prompt_tokens, completion_tokens, tool_use_prompt_tokens, total_tokens }` |
+| `measureLatency(startMs, endMs?)` | `endMs - startMs` |
+| `recordLlmMetric(label, step, response, latencyMs, provider, model)` | **Event quan trọng nhất** — ghi `LLM_METRIC` đầy đủ field |
+| `recordReasoningStep(step, rawContent)` | Ghi `AGENT_REASONING_STEP` |
+| `recordToolCall(step, toolName, args)` | Ghi `TOOL_CALL` |
+| `recordToolResult(step, toolName, success, durationMs, resultPreview)` | Ghi `TOOL_RESULT` |
 
-**Event `LLM_METRIC` đầy đủ field theo handoff:**
+**Ví dụ event `LLM_METRIC`:**
+
 ```json
 {
   "timestamp": "2026-04-06T04:01:35.904Z",
@@ -103,12 +157,9 @@ Bóc tách usage từ Gemini response và ghi event telemetry.
     "step": 1,
     "prompt_tokens": 123,
     "completion_tokens": 45,
-    "tool_use_prompt_tokens": 0,
     "total_tokens": 168,
     "latency_ms": 796,
     "estimated_cost_usd": 0.000012,
-    "request_index": 1,
-    "finish_reason": "STOP",
     "function_call_count": 0,
     "has_grounding_sources": false
   }
@@ -117,130 +168,213 @@ Bóc tách usage từ Gemini response và ghi event telemetry.
 
 ---
 
-### `src/utils/comparison.ts` — Tạo mới
+### 3.5 `src/utils/comparison.ts` — MỚI
 
-Tổng hợp số liệu và tạo bảng so sánh cuối.
+**Vai trò:** Tổng hợp kết quả mỗi run và tạo bảng so sánh cuối.
 
-**Hàm:**
-
-| Hàm | Mô tả |
+| Hàm | Vai trò |
 |---|---|
-| `finalizeRunSummary(session)` | Tổng hợp tất cả `LLM_METRIC` events → 1 `RunSummary` object |
-| `buildComparisonSummary(chatbotSummary, agentSummary)` | Tạo `ComparisonSummary` gồm cả 2 run + `diff` |
-| `exportComparisonMarkdown(summary)` | Render bảng Markdown 4 cột (Metric / Chatbot / Agent / Ghi chú) |
-| `exportComparisonJson(summary)` | Serialize JSON đầy đủ |
-| `downloadComparisonMd(summary)` | Download file `compare_<timestamp>.md` |
-| `downloadComparisonJson(summary)` | Download file `compare_<timestamp>.json` |
+| `finalizeRunSummary(session)` | Duyệt tất cả `LLM_METRIC` → tính tổng tokens, cost, latency trung bình |
+| `buildComparisonSummary(chatbotSummary, agentSummary)` | Ghép 2 run + tính diff (ratio token, ratio cost, chênh lệch latency) |
+| `exportComparisonMarkdown(summary)` | Render bảng Markdown |
+| `downloadComparisonMd(summary)` | Download `compare_*.md` qua browser |
+| `downloadComparisonJson(summary)` | Download `compare_*.json` qua browser |
 
-**`RunSummary` gồm các field:**
-- `total_tokens`, `prompt_tokens`, `completion_tokens`
-- `total_cost_usd`, `avg_latency_ms`, `total_duration_ms`
-- `loop_count`, `tool_call_count`, `error_count`, `llm_call_count`
+**Bảng so sánh mẫu:**
 
-**Bảng so sánh xuất ra:**
-```
-| Metric              | Chatbot   | Agent     | Ghi chú                    |
-|---------------------|----------:|----------:|----------------------------|
-| Total Tokens        | 168       | 1,245     | Agent dùng 7.41x tokens    |
-| Total Cost (USD)    | $0.000012 | $0.000089 | Agent tốn 7.41x chi phí    |
-| Avg Latency (ms)    | 796       | 2,341     | +1545ms                    |
-| Loop Count          | 0         | 3         | +3 loops                   |
-| Tool Call Count     | 0         | 4         | +4 tools                   |
-```
+| Metric | Chatbot | Agent | Ghi chú |
+|---|---:|---:|---|
+| Total Tokens | 168 | 1,245 | Agent dùng 7.41x tokens |
+| Total Cost (USD) | $0.000012 | $0.000089 | Agent tốn 7.41x chi phí |
+| Avg Latency (ms) | 796 | 2,341 | +1545ms |
+| Loop Count | 0 | 3 | +3 loops |
+| Tool Call Count | 0 | 4 | +4 tools |
+| Error Count | 0 | 0 | |
 
 ---
 
-### `src/services/gemini.ts` — Sửa
+### 3.6 `src/services/gemini.ts` — SỬA
 
-**Hàm đã thêm:**
+**Thay đổi chính:**
 
-| Hàm | Mô tả |
+**a) Tách mode Chatbot vs Agent:**
+
+| Mode | System instruction | Tools | Tool loop |
+|---|---|---|---|
+| `chatbot` | "Trả lời trực tiếp, KHÔNG gọi tool" | Không truyền | Không |
+| `agent` | "LUÔN gọi ít nhất 1 tool" | Đầy đủ 4 tools | Có (ReAct) |
+
+**b) Hook telemetry:**
+
+```
+chatWithTravelAgent(messages, mode)
+  │ startTime = Date.now()
+  │ ... gọi API ...
+  │ latencyMs = Date.now() - startTime
+  │
+  └─→ recordLlmMetric(label, step, response, latencyMs, provider, model)
+       └─→ extractUsageMetrics(response)
+       └─→ calculateEstimatedCost(...)
+       └─→ logEvent("LLM_METRIC", {...})
+```
+
+```
+handleToolCalls(response)
+  │ for mỗi function call:
+  │   recordToolCall(step, toolName, args)         ← trước khi chạy
+  │   ... chạy tool ...
+  │   recordToolResult(step, toolName, success, duration, preview)  ← sau khi chạy
+```
+
+**c) Dùng config provider:**
+
+```ts
+// Trước:
+const getAI = () => new GoogleGenAI({
+    apiKey: process.env.SHOPAIKEY_API_KEY || process.env.GEMINI_API_KEY || '',
+    httpOptions: { baseUrl: 'https://api.shopaikey.com' },  // luôn qua shopaikey
+});
+
+// Sau:
+const getAI = () => {
+    const { apiKey, baseUrl } = getActiveProviderConfig();   // đọc từ config
+    return new GoogleGenAI({
+        apiKey,
+        ...(baseUrl ? { httpOptions: { baseUrl } } : {}),   // chỉ set nếu có
+    });
+};
+```
+
+| Hàm mới | Vai trò |
 |---|---|
 | `resetStepCounter()` | Reset bộ đếm step về 0 trước mỗi session |
-| `getStepCount()` | Lấy số step hiện tại |
-
-**Hàm đã thay đổi:**
-
-| Hàm | Thay đổi |
-|---|---|
-| `chatWithTravelAgent(messages, mode?, retryCount?)` | Thêm tham số `mode: 'chatbot' \| 'agent'` — chatbot không truyền tools, agent truyền đủ tools. Gọi `recordLlmMetric(...)` sau mỗi response. Gọi `recordReasoningStep(...)` nếu là agent. |
-| `handleToolCalls(response)` | Thêm `recordToolCall(...)` trước khi chạy tool. Thêm `recordToolResult(...)` sau khi tool hoàn thành. Xử lý `unknown tool` thành `success=false`. |
-
-**Thêm 2 system instruction riêng biệt:**
-- `AGENT_SYSTEM_INSTRUCTION` — buộc gọi tools
-- `CHATBOT_SYSTEM_INSTRUCTION` — không gọi tool, trả lời trực tiếp
-
-**Hằng số mới:**
-```ts
-export const PROVIDER = 'google';
-export const MODEL    = 'gemini-2.5-flash';
-```
+| `getStepCount()` | Lấy step hiện tại |
 
 ---
 
-### `src/App.tsx` — Sửa
+### 3.7 `src/App.tsx` — SỬA
 
-**State mới:**
+**UI mới trên header:**
 
-| State | Kiểu | Mô tả |
-|---|---|---|
-| `mode` | `'agent' \| 'chatbot'` | Mode hiện tại |
-| `showPanel` | `boolean` | Hiện/ẩn Telemetry panel |
-| `panelTab` | `'log' \| 'compare'` | Tab đang hiện trong panel |
-| `chatbotSummary` | `RunSummary \| null` | Kết quả sau khi chạy chatbot |
-| `agentSummary` | `RunSummary \| null` | Kết quả sau khi chạy agent |
-| `comparison` | `ComparisonSummary \| null` | Tự động build khi có đủ 2 summary |
-| `liveLog` | `string` | JSONL hiện tại để hiển thị trong panel |
+| Nút | Chức năng |
+|---|---|
+| **Agent / Chatbot** toggle | Chuyển mode — chatbot không gọi tool, agent gọi tool |
+| **Telemetry** | Mở/đóng panel bên phải |
+
+**Panel Telemetry có 2 tab:**
+
+| Tab | Nội dung |
+|---|---|
+| **Raw Log (JSONL)** | Hiển thị log real-time dạng JSONL, có nút download `.jsonl` |
+| **So sanh** | Bảng so sánh Chatbot vs Agent, có nút download `.md` / `.json` |
 
 **Logic mới trong `handleSend()`:**
-- Gọi `resetStepCounter()` trước mỗi request
-- Gọi `startSessionLog(mode, userMessage, PROVIDER, MODEL)`
-- Chatbot mode: không dùng tool loop
-- Agent mode: giữ nguyên ReAct loop
-- Sau khi hoàn thành: gọi `endSession(...)`, `finalizeRunSummary(...)`, cập nhật `chatbotSummary` hoặc `agentSummary`
-- Khi catch error: gọi `logError(...)`
 
-**Component mới:**
-- `<CompareRow>` — 1 dòng trong bảng so sánh
-- `<SummaryCard>` — Card tóm tắt 1 run (hiện khi chưa có đủ 2 run để compare)
+1. `resetStepCounter()` — reset step
+2. `startSessionLog(mode, query, provider, model)` — mở session
+3. Gọi model (chatbot: 1 lần / agent: loop cho đến khi hết tool call)
+4. `endSession(finalAnswer)` — đóng session → tự động ghi file vào `logs/`
+5. `finalizeRunSummary(session)` → cập nhật `chatbotSummary` hoặc `agentSummary`
+6. Khi có đủ cả 2 → tự động `buildComparisonSummary()` + ghi file `compare_*.md` vào `logs/`
 
 ---
 
-## Quy trình so sánh chuẩn (theo handoff)
+### 3.8 `server/vite-plugin-logger.ts` — MỚI
+
+**Vấn đề:** Browser không thể ghi file trực tiếp. Giảng viên yêu cầu có file trong `logs/`.
+
+**Giải pháp:** Tạo Vite plugin — khi chạy `npm run dev`, plugin thêm 4 endpoint API vào dev server:
+
+| Endpoint | Method | Chức năng | File sinh ra |
+|---|---|---|---|
+| `/api/log/event` | POST | Append 1 dòng JSONL vào file | `logs/session_*.jsonl` (real-time) |
+| `/api/log/session` | POST | Lưu toàn bộ session | `logs/session_*.jsonl` + `logs/session_*.json` |
+| `/api/log/compare` | POST | Lưu bảng so sánh | `logs/compare_*.md` + `logs/compare_*.json` |
+| `/api/log/list` | GET | Liệt kê tất cả file log | (JSON response) |
+
+**Kết quả trong terminal khi chat:**
 
 ```
-1. Bật Telemetry panel (nút "Telemetry" trên header)
-2. Chọn Chatbot mode → gửi câu hỏi (VD: "Kế hoạch Đà Nẵng 3 ngày")
-3. Chuyển sang Agent mode → gửi CÙNG câu hỏi đó
-4. Mở tab "So sanh" → bảng tự động hiện
-5. Download .md / .json để nộp báo cáo
+📝 [logger] New session file: logs/session_chatbot_2026-04-06T12-30-45.jsonl
+✅ [logger] Session saved:
+   📄 logs/session_chatbot_2026-04-06T12-30-45.jsonl
+   📄 logs/session_chatbot_2026-04-06T12-30-45.json
+📊 [logger] Comparison saved:
+   📄 logs/compare_2026-04-06T12-35-00.md
+   📄 logs/compare_2026-04-06T12-35-00.json
 ```
 
 ---
 
-## Event schema đầy đủ
+## 4. Cấu trúc thư mục `logs/` sau khi chạy
 
 ```
-CHATBOT_START / AGENT_START
-LLM_METRIC             ← event quan trọng nhất
-AGENT_REASONING_STEP   ← chỉ agent
-TOOL_CALL              ← chỉ agent
-TOOL_RESULT            ← chỉ agent
-CHATBOT_END / AGENT_SUCCESS
-ERROR
+logs/
+├── session_chatbot_2026-04-06T12-30-45.jsonl    ← mỗi dòng 1 JSON event
+├── session_chatbot_2026-04-06T12-30-45.json     ← full session (pretty-print)
+├── session_agent_2026-04-06T12-32-10.jsonl
+├── session_agent_2026-04-06T12-32-10.json
+├── compare_2026-04-06T12-35-00.md               ← bảng Markdown so sánh
+├── compare_2026-04-06T12-35-00.json             ← data JSON so sánh
+└── .gitkeep
 ```
-
-Mỗi event đều có: `timestamp`, `event`, `data`.
 
 ---
 
-## Checklist nghiệm thu (theo handoff)
+## 5. Hướng dẫn chạy
 
-- [x] Có raw log theo kiểu JSONL
-- [x] Có event `LLM_METRIC`
-- [x] Có tổng hợp Chatbot vs Agent
-- [x] Có tính `estimated_cost_usd`
-- [x] Có `latency_ms` cho từng model call
-- [x] Có `loop_count` và `tool_call_count` cho agent
-- [x] Có `error_count`
-- [x] Có thể dùng log để chỉ ra 1 failed trace cụ thể
+```bash
+# 1. Cài dependencies (nếu chưa)
+npm install
+
+# 2. Chỉnh API key trong .env
+#    - Dùng Google: điền GEMINI_API_KEY, đổi ACTIVE_PROVIDER = 'google'
+#    - Dùng ShopAIKey: điền SHOPAIKEY_API_KEY, đổi ACTIVE_PROVIDER = 'shopaikey'
+
+# 3. Chạy dev server
+npm run dev
+
+# 4. Mở browser: http://localhost:3000
+```
+
+**Quy trình so sánh:**
+
+1. Click nút **Telemetry** trên header
+2. Chọn mode **Chatbot** → gõ: `Kế hoạch Đà Nẵng 3 ngày` → Send
+3. Chọn mode **Agent** → gõ **cùng câu hỏi** → Send
+4. Tab **So sanh** hiện bảng tự động
+5. Mở thư mục `logs/` — file đã được tạo sẵn
+
+---
+
+## 6. Danh sách event theo schema handoff
+
+```
+CHATBOT_START          → bắt đầu run chatbot
+AGENT_START            → bắt đầu run agent
+LLM_METRIC             → mỗi lần gọi model (event quan trọng nhất)
+AGENT_REASONING_STEP   → agent trả về reasoning (chỉ agent)
+TOOL_CALL              → trước khi chạy tool (chỉ agent)
+TOOL_RESULT            → sau khi tool trả kết quả (chỉ agent)
+CHATBOT_END            → kết thúc run chatbot
+AGENT_SUCCESS          → kết thúc run agent
+ERROR                  → khi có lỗi
+```
+
+Tất cả event đều có 3 field gốc: `timestamp`, `event`, `data`.
+
+---
+
+## 7. Checklist nghiệm thu
+
+| Yêu cầu | Trạng thái |
+|---|:---:|
+| Có raw log JSONL trong `logs/` | OK |
+| Có event `LLM_METRIC` | OK |
+| Có `estimated_cost_usd` | OK |
+| Có `latency_ms` cho từng model call | OK |
+| Có `loop_count` + `tool_call_count` cho agent | OK |
+| Có `error_count` | OK |
+| Có bảng tổng hợp Chatbot vs Agent | OK |
+| File tự sinh vào `logs/` khi chat | OK |
+| Có thể chọn provider Google hoặc ShopAIKey | OK |

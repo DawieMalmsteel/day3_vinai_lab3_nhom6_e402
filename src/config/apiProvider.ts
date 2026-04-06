@@ -17,7 +17,8 @@ export const ACTIVE_PROVIDER: ApiProvider = 'shopaikey';
 // Model muốn dùng
 export const MODEL = 'gemini-2.5-flash';
 
-// Tên provider đưa vào telemetry log
+// Tên provider đưa vào telemetry log & tra bảng giá
+// Luôn là 'google' vì cả 2 provider đều gọi model Gemini của Google
 export const PROVIDER_LABEL = 'google';
 
 // ────────────────────────── Provider configs ──────────────────────
@@ -57,8 +58,8 @@ export function getActiveProviderConfig(): ProviderConfig {
       `[apiProvider] API key cho provider "${ACTIVE_PROVIDER}" chưa được set.\n` +
       `Hãy thêm vào file .env:\n` +
       (ACTIVE_PROVIDER === 'google'
-        ? '  VITE_GEMINI_API_KEY=AIza...'
-        : '  VITE_SHOPAIKEY_API_KEY=sk-...'),
+        ? '  GEMINI_API_KEY=AIza...'
+        : '  SHOPAIKEY_API_KEY=sk-...'),
     );
   }
 

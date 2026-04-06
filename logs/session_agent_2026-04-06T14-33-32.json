@@ -1,0 +1,55 @@
+{
+  "session_id": "sess_1775486012411_pbo9zg",
+  "label": "agent",
+  "query": "kế hoạch đi đà nẵng 3 ngày 10tr",
+  "provider": "google",
+  "model": "gemini-2.5-flash",
+  "start_time": 1775486012411,
+  "events": [
+    {
+      "timestamp": "2026-04-06T14:33:32.411Z",
+      "event": "AGENT_START",
+      "data": {
+        "session_id": "sess_1775486012411_pbo9zg",
+        "query": "kế hoạch đi đà nẵng 3 ngày 10tr",
+        "provider": "google",
+        "model": "gemini-2.5-flash"
+      }
+    },
+    {
+      "timestamp": "2026-04-06T14:33:32.412Z",
+      "event": "LLM_METRIC",
+      "data": {
+        "label": "agent",
+        "provider": "google",
+        "model": "gemini-2.5-flash",
+        "step": 1,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "thinking_tokens": 0,
+        "tool_use_prompt_tokens": 0,
+        "total_tokens": 0,
+        "latency_ms": 0,
+        "estimated_cost_usd": 0,
+        "cost_breakdown": {
+          "input_cost": 0,
+          "output_cost": 0,
+          "thinking_cost": 0
+        },
+        "feature": "TRIP_PLANNER",
+        "is_local": true
+      }
+    },
+    {
+      "timestamp": "2026-04-06T14:33:32.412Z",
+      "event": "AGENT_SUCCESS",
+      "data": {
+        "final_answer": "## 📅 Kế Hoạch Chuyến Đi Đến đà nẵng\n\n**Từ:** 06/04/2026 | **Đến:** 08/04/2026\n**Số người:** 1 | **Ngân sách dự kiến:** 2.0M VND\n\n---\n\n### Ngày 1\n\n**📍 Chỗ ở:** Khách sạn 4 sao tại Mỹ Khê\n\n**🎯 Hoạt đ",
+        "total_duration_ms": 1,
+        "feature": "TRIP_PLANNER",
+        "is_local": true,
+        "latency_ms": 0
+      }
+    }
+  ]
+}

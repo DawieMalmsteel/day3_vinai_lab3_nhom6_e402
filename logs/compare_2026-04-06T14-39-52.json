@@ -1,0 +1,47 @@
+{
+  "query": "đi Đà Nẵng 3 ngày giá 15tr",
+  "provider": "google",
+  "model": "gemini-2.5-flash",
+  "chatbot": {
+    "label": "chatbot",
+    "session_id": "sess_1775486385816_jwywbt",
+    "query": "đi Đà Nẵng 3 ngày giá 15tr",
+    "provider": "google",
+    "model": "gemini-2.5-flash",
+    "total_tokens": 3608,
+    "prompt_tokens": 2688,
+    "completion_tokens": 0,
+    "total_cost_usd": 0.0024682,
+    "avg_latency_ms": 6709,
+    "total_duration_ms": 6709,
+    "loop_count": 0,
+    "tool_call_count": 0,
+    "error_count": 0,
+    "llm_call_count": 1
+  },
+  "agent": {
+    "label": "agent",
+    "session_id": "sess_1775486288230_6br6k1",
+    "query": "đi Đà Nẵng 3 ngày giá 15tr",
+    "provider": "google",
+    "model": "gemini-2.5-flash",
+    "total_tokens": 3053,
+    "prompt_tokens": 2496,
+    "completion_tokens": 65,
+    "total_cost_usd": 0.0012744,
+    "avg_latency_ms": 75712,
+    "total_duration_ms": 75713,
+    "loop_count": 0,
+    "tool_call_count": 0,
+    "error_count": 0,
+    "llm_call_count": 1
+  },
+  "diff": {
+    "token_ratio": "Agent dùng 0.85x tokens",
+    "cost_ratio": "Agent tốn 0.52x chi phí",
+    "latency_diff_ms": 69003,
+    "extra_tool_calls": 0,
+    "extra_loops": 0
+  },
+  "generated_at": "2026-04-06T14:39:52.563Z"
+}

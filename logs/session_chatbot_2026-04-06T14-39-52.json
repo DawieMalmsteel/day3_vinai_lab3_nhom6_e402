@@ -1,0 +1,58 @@
+{
+  "session_id": "sess_1775486385816_jwywbt",
+  "label": "chatbot",
+  "query": "đi Đà Nẵng 3 ngày giá 15tr",
+  "provider": "google",
+  "model": "gemini-2.5-flash",
+  "start_time": 1775486385816,
+  "events": [
+    {
+      "timestamp": "2026-04-06T14:39:45.816Z",
+      "event": "CHATBOT_START",
+      "data": {
+        "session_id": "sess_1775486385816_jwywbt",
+        "query": "đi Đà Nẵng 3 ngày giá 15tr",
+        "provider": "google",
+        "model": "gemini-2.5-flash"
+      }
+    },
+    {
+      "timestamp": "2026-04-06T14:39:52.525Z",
+      "event": "LLM_METRIC",
+      "data": {
+        "label": "chatbot",
+        "provider": "google",
+        "model": "gemini-2.5-flash",
+        "step": 1,
+        "prompt_tokens": 2688,
+        "completion_tokens": 0,
+        "thinking_tokens": 590,
+        "tool_use_prompt_tokens": 0,
+        "total_tokens": 3608,
+        "latency_ms": 6709,
+        "estimated_cost_usd": 0.0024682,
+        "cost_breakdown": {
+          "input_cost": 0.0004032,
+          "output_cost": 0,
+          "thinking_cost": 0.002065
+        },
+        "request_index": 1,
+        "finish_reason": "STOP",
+        "function_call_count": 0,
+        "has_grounding_sources": false
+      }
+    },
+    {
+      "timestamp": "2026-04-06T14:39:52.525Z",
+      "event": "CHATBOT_END",
+      "data": {
+        "final_answer": "Chào bạn! Với ngân sách 15 triệu VND cho 3 ngày ở Đà Nẵng, bạn hoàn toàn có thể tận hưởng một chuyến đi sang trọng và đáng nhớ đấy! ✨\n\nĐây là gợi ý lịch trình cao cấp cho bạn:\n\n*   **Ngày 1**: Đến Đà ",
+        "total_duration_ms": 6709,
+        "total_tokens": 0,
+        "total_cost_usd": 0,
+        "steps": 1,
+        "tool_call_count": 0
+      }
+    }
+  ]
+}

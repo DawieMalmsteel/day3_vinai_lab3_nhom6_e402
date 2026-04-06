@@ -1,0 +1,5 @@
+{"timestamp":"2026-04-06T08:41:02.245Z","event":"AGENT_START","data":{"session_id":"sess_1775464862245_4rm5jb","query":"Tôi muốn đến đà nẵng","provider":"google","model":"gemini-2.5-flash"}}
+{"timestamp":"2026-04-06T08:42:19.420Z","event":"LLM_METRIC","data":{"label":"agent","provider":"google","model":"gemini-2.5-flash","step":1,"prompt_tokens":611,"completion_tokens":22,"tool_use_prompt_tokens":0,"total_tokens":728,"latency_ms":77172,"estimated_cost_usd":0.00005242,"request_index":1,"finish_reason":"STOP","function_call_count":1,"has_grounding_sources":false}}
+{"timestamp":"2026-04-06T08:42:19.420Z","event":"TOOL_CALL","data":{"step":1,"tool_name":"query_knowledge_base","args":{"location":"Đà Nẵng","query":"giới thiệu tổng quan về Đà Nẵng"}}}
+{"timestamp":"2026-04-06T08:42:19.421Z","event":"TOOL_RESULT","data":{"step":1,"tool_name":"query_knowledge_base","success":true,"duration_ms":1,"result_preview":"Không tìm thấy thông tin cho địa điểm: Đà Nẵng. Hiện tại tôi chỉ có dữ liệu cho Đà Lạt, Đà Nẵng và Phú Quốc."}}
+{"timestamp":"2026-04-06T08:44:24.664Z","event":"ERROR","data":{"label":"agent","step":2,"error_type":"PROVIDER_ERROR","message":"Failed to fetch"}}

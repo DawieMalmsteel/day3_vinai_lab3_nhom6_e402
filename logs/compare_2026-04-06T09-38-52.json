@@ -1,0 +1,47 @@
+{
+  "query": "tôi muốn đi đà nẵng 3 ngày",
+  "provider": "shopaikey",
+  "model": "gemini-2.5-flash",
+  "chatbot": {
+    "label": "chatbot",
+    "session_id": "sess_1775468329206_kf2tdm",
+    "query": "tôi muốn đi đà nẵng 3 ngày",
+    "provider": "shopaikey",
+    "model": "gemini-2.5-flash",
+    "total_tokens": 2123,
+    "prompt_tokens": 1649,
+    "completion_tokens": 165,
+    "total_cost_usd": 0,
+    "avg_latency_ms": 3194,
+    "total_duration_ms": 3195,
+    "loop_count": 0,
+    "tool_call_count": 0,
+    "error_count": 0,
+    "llm_call_count": 1
+  },
+  "agent": {
+    "label": "agent",
+    "session_id": "sess_1775468048281_ybfmni",
+    "query": "tôi muốn đi đà nẵng 3 ngày",
+    "provider": "shopaikey",
+    "model": "gemini-2.5-flash",
+    "total_tokens": 1851,
+    "prompt_tokens": 1713,
+    "completion_tokens": 61,
+    "total_cost_usd": 0,
+    "avg_latency_ms": 67480,
+    "total_duration_ms": 67482,
+    "loop_count": 0,
+    "tool_call_count": 0,
+    "error_count": 0,
+    "llm_call_count": 1
+  },
+  "diff": {
+    "token_ratio": "Agent dùng 0.87x tokens",
+    "cost_ratio": "Agent tốn N/Ax chi phí",
+    "latency_diff_ms": 64286,
+    "extra_tool_calls": 0,
+    "extra_loops": 0
+  },
+  "generated_at": "2026-04-06T09:38:52.435Z"
+}

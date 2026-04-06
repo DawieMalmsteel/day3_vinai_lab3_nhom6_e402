@@ -1,0 +1,55 @@
+{
+  "session_id": "sess_1775485706534_66336q",
+  "label": "agent",
+  "query": "Kế hoạch đi đà nẵng, chuyến bay, khách sạng",
+  "provider": "google",
+  "model": "gemini-2.5-flash",
+  "start_time": 1775485706534,
+  "events": [
+    {
+      "timestamp": "2026-04-06T14:28:26.534Z",
+      "event": "AGENT_START",
+      "data": {
+        "session_id": "sess_1775485706534_66336q",
+        "query": "Kế hoạch đi đà nẵng, chuyến bay, khách sạng",
+        "provider": "google",
+        "model": "gemini-2.5-flash"
+      }
+    },
+    {
+      "timestamp": "2026-04-06T14:28:26.535Z",
+      "event": "LLM_METRIC",
+      "data": {
+        "label": "agent",
+        "provider": "google",
+        "model": "gemini-2.5-flash",
+        "step": 1,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "thinking_tokens": 0,
+        "tool_use_prompt_tokens": 0,
+        "total_tokens": 0,
+        "latency_ms": 0,
+        "estimated_cost_usd": 0,
+        "cost_breakdown": {
+          "input_cost": 0,
+          "output_cost": 0,
+          "thinking_cost": 0
+        },
+        "feature": "HOTEL_SEARCH",
+        "is_local": true
+      }
+    },
+    {
+      "timestamp": "2026-04-06T14:28:26.535Z",
+      "event": "AGENT_SUCCESS",
+      "data": {
+        "final_answer": "Bạn muốn tìm khách sạn ở đà nẵng. Chọn cách tìm kiếm:\n\nA) ⚡ **Nhanh** - 2-3 khách sạn tốt nhất\nB) 🧠 **Thông minh** - Hỏi sở thích rồi gợi ý\nC) 📋 **Chi tiết** - Tìm kiếm đầy đủ theo yêu cầu",
+        "total_duration_ms": 1,
+        "feature": "HOTEL_SEARCH",
+        "is_local": true,
+        "latency_ms": 0
+      }
+    }
+  ]
+}

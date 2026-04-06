@@ -1,0 +1,58 @@
+{
+  "session_id": "sess_1775485077202_gm83qj",
+  "label": "chatbot",
+  "query": "kế hoạch đi đà nẵng",
+  "provider": "google",
+  "model": "gemini-2.5-flash",
+  "start_time": 1775485077202,
+  "events": [
+    {
+      "timestamp": "2026-04-06T14:17:57.202Z",
+      "event": "CHATBOT_START",
+      "data": {
+        "session_id": "sess_1775485077202_gm83qj",
+        "query": "kế hoạch đi đà nẵng",
+        "provider": "google",
+        "model": "gemini-2.5-flash"
+      }
+    },
+    {
+      "timestamp": "2026-04-06T14:18:00.756Z",
+      "event": "LLM_METRIC",
+      "data": {
+        "label": "chatbot",
+        "provider": "google",
+        "model": "gemini-2.5-flash",
+        "step": 1,
+        "prompt_tokens": 1596,
+        "completion_tokens": 0,
+        "thinking_tokens": 324,
+        "tool_use_prompt_tokens": 0,
+        "total_tokens": 2052,
+        "latency_ms": 3554,
+        "estimated_cost_usd": 0.0013734,
+        "cost_breakdown": {
+          "input_cost": 0.0002394,
+          "output_cost": 0,
+          "thinking_cost": 0.001134
+        },
+        "request_index": 1,
+        "finish_reason": "STOP",
+        "function_call_count": 0,
+        "has_grounding_sources": false
+      }
+    },
+    {
+      "timestamp": "2026-04-06T14:18:00.757Z",
+      "event": "CHATBOT_END",
+      "data": {
+        "final_answer": "Tuyệt vời! Đà Nẵng là một điểm đến tuyệt đẹp. Dưới đây là gợi ý lịch trình 3 ngày cho bạn:\n\n*   **Ngày 1**: Tham quan Ngũ Hành Sơn, bãi biển Mỹ Khê và khám phá Phố cổ Hội An.\n*   **Ngày 2**: Khám phá ",
+        "total_duration_ms": 3555,
+        "total_tokens": 0,
+        "total_cost_usd": 0,
+        "steps": 1,
+        "tool_call_count": 0
+      }
+    }
+  ]
+}

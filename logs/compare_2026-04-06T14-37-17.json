@@ -1,0 +1,47 @@
+{
+  "query": "kế hoạch đi Đà Nẵng 3 ngày 10tr",
+  "provider": "google",
+  "model": "gemini-2.5-flash",
+  "chatbot": {
+    "label": "chatbot",
+    "session_id": "sess_1775486226833_2vscqt",
+    "query": "kế hoạch đi Đà Nẵng 3 ngày 10tr",
+    "provider": "google",
+    "model": "gemini-2.5-flash",
+    "total_tokens": 3788,
+    "prompt_tokens": 2003,
+    "completion_tokens": 0,
+    "total_cost_usd": 0.00534395,
+    "avg_latency_ms": 10265,
+    "total_duration_ms": 10267,
+    "loop_count": 0,
+    "tool_call_count": 0,
+    "error_count": 0,
+    "llm_call_count": 1
+  },
+  "agent": {
+    "label": "agent",
+    "session_id": "sess_1775486222157_rkv6w7",
+    "query": "kế hoạch đi Đà Nẵng 3 ngày 10tr",
+    "provider": "google",
+    "model": "gemini-2.5-flash",
+    "total_tokens": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_cost_usd": 0,
+    "avg_latency_ms": 0,
+    "total_duration_ms": 1,
+    "loop_count": 0,
+    "tool_call_count": 0,
+    "error_count": 0,
+    "llm_call_count": 1
+  },
+  "diff": {
+    "token_ratio": "Agent dùng 0.00x tokens",
+    "cost_ratio": "Agent tốn 0.00x chi phí",
+    "latency_diff_ms": -10265,
+    "extra_tool_calls": 0,
+    "extra_loops": 0
+  },
+  "generated_at": "2026-04-06T14:37:17.129Z"
+}

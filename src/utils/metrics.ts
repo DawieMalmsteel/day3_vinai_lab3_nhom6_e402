@@ -10,7 +10,8 @@ import { calculateEstimatedCost, getPricingConfig, type PricingConfig } from './
 
 export interface UsageMetrics {
   prompt_tokens: number;
-  completion_tokens: number;
+  completion_tokens: number;       // output tokens KHÔNG bao gồm thinking
+  thinking_tokens: number;          // thinking tokens (Gemini 2.5 tính giá riêng)
   tool_use_prompt_tokens: number;
   total_tokens: number;
 }
@@ -22,10 +23,16 @@ export interface LlmMetricData {
   step: number;
   prompt_tokens: number;
   completion_tokens: number;
+  thinking_tokens: number;
   tool_use_prompt_tokens: number;
   total_tokens: number;
   latency_ms: number;
   estimated_cost_usd: number;
+  cost_breakdown: {
+    input_cost: number;
+    output_cost: number;
+    thinking_cost: number;
+  };
   request_index?: number;
   finish_reason?: string;
   function_call_count: number;
@@ -37,23 +44,40 @@ export interface LlmMetricData {
 /**
  * Bóc tách token usage từ Gemini GenerateContentResponse.
  *
- * Gemini trả usageMetadata ở response.usageMetadata hoặc
- * response.candidates[0].usageMetadata tuỳ SDK version.
+ * Gemini 2.5 Flash trả về:
+ *   - promptTokenCount      → input tokens
+ *   - candidatesTokenCount  → tổng output (bao gồm cả thinking)
+ *   - thoughtsTokenCount    → thinking tokens (tính giá riêng ~$3.50/1M)
+ *   - totalTokenCount       → tổng tất cả
+ *
+ * Để tính cost đúng:
+ *   completion_tokens = candidatesTokenCount - thoughtsTokenCount
+ *   thinking_tokens   = thoughtsTokenCount
  */
 export function extractUsageMetrics(response: GenerateContentResponse): UsageMetrics {
-  // Gemini SDK ≥ 1.x stores usageMetadata at top level
   const usage = (response as any).usageMetadata ?? {};
 
   const prompt_tokens: number =
     usage.promptTokenCount ?? usage.prompt_token_count ?? 0;
-  const completion_tokens: number =
+
+  // Tổng output tokens (bao gồm thinking nếu có)
+  const raw_output: number =
     usage.candidatesTokenCount ?? usage.candidates_token_count ?? usage.responseTokenCount ?? 0;
+
+  // Thinking tokens — Gemini 2.5 Flash trả riêng field này
+  const thinking_tokens: number =
+    usage.thoughtsTokenCount ?? usage.thoughts_token_count ?? 0;
+
+  // Output tokens thuần (trừ thinking) — để tính cost đúng rate
+  const completion_tokens: number = Math.max(0, raw_output - thinking_tokens);
+
   const tool_use_prompt_tokens: number =
     usage.toolUsePromptTokenCount ?? usage.tool_use_prompt_token_count ?? 0;
-  const total_tokens: number =
-    usage.totalTokenCount ?? usage.total_token_count ?? (prompt_tokens + completion_tokens);
 
-  return { prompt_tokens, completion_tokens, tool_use_prompt_tokens, total_tokens };
+  const total_tokens: number =
+    usage.totalTokenCount ?? usage.total_token_count ?? (prompt_tokens + raw_output);
+
+  return { prompt_tokens, completion_tokens, thinking_tokens, tool_use_prompt_tokens, total_tokens };
 }
 
 // ────────────────────────────── Latency ───────────────────────────
@@ -81,14 +105,33 @@ export function recordLlmMetric(
 
   // Tính cost
   const pricing: PricingConfig | null = getPricingConfig(provider, model);
-  const estimated_cost_usd = pricing
-    ? calculateEstimatedCost(
-        usage.prompt_tokens,
-        usage.completion_tokens,
-        pricing,
-        usage.tool_use_prompt_tokens,
-      )
-    : 0;
+
+  let estimated_cost_usd = 0;
+  let cost_breakdown = { input_cost: 0, output_cost: 0, thinking_cost: 0 };
+
+  if (pricing) {
+    estimated_cost_usd = calculateEstimatedCost(
+      usage.prompt_tokens,
+      usage.completion_tokens,
+      pricing,
+      usage.thinking_tokens,
+      usage.tool_use_prompt_tokens,
+    );
+
+    // Breakdown cho debug
+    cost_breakdown = {
+      input_cost: parseFloat(((usage.prompt_tokens / 1_000_000) * pricing.inputPricePer1M).toFixed(8)),
+      output_cost: parseFloat(((usage.completion_tokens / 1_000_000) * pricing.outputPricePer1M).toFixed(8)),
+      thinking_cost: pricing.thinkingPricePer1M
+        ? parseFloat(((usage.thinking_tokens / 1_000_000) * pricing.thinkingPricePer1M).toFixed(8))
+        : 0,
+    };
+  } else {
+    console.warn(
+      `[metrics] Không tìm thấy bảng giá cho provider="${provider}", model="${model}". ` +
+      `Cost sẽ = $0. Hãy kiểm tra pricing.ts và apiProvider.ts.`
+    );
+  }
 
   // Finish reason
   const finishReason = (response as any).candidates?.[0]?.finishReason ?? '';
@@ -108,6 +151,7 @@ export function recordLlmMetric(
     ...usage,
     latency_ms: latencyMs,
     estimated_cost_usd,
+    cost_breakdown,
     request_index: requestIndex,
     finish_reason: finishReason,
     function_call_count: functionCallCount,
