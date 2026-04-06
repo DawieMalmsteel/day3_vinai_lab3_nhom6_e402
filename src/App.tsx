@@ -7,7 +7,7 @@ import { chatWithTravelAgent, query_knowledge_base } from './services/gemini';
 import { debug } from './utils/debug';
 import { detectRoute, parseTransport, parsePassengerCount, searchBookingLinks, formatBookingOptions } from './services/bookingService';
 import { detectHotelSearch, searchHotels, formatHotelsOptionA, formatHotelsOptionB, formatHotelsOptionC } from './services/hotelService';
-import { isValidTopic, getOutOfScopeMessage, detectTopicCategory } from './services/contentFilter';
+
 import { detectTripPlanRequest, parseTripDetails, generateItinerary, formatItinerary } from './services/tripPlannerService';
 import { detectPriceComparisonRequest, extractPriceComparisonDetails, comparePrices, formatPriceComparison } from './services/priceComparisonService';
 import { detectRestaurantRequest, extractRestaurantDetails, getRestaurantRecommendations, formatRestaurantRecommendations } from './services/restaurantService';
@@ -56,17 +56,9 @@ export default function App() {
     debug.log('APP', 'User message received', userMessage);
 
     try {
-      // CHECK TOPIC VALIDITY - MUST BE ABOUT FLIGHTS, BUSES, HOTELS, OR TRAVEL GUIDES
-      if (!isValidTopic(userMessage)) {
-        debug.log('APP', 'Message is out of scope');
-        const outOfScopeMsg = getOutOfScopeMessage();
-        setMessages(prev => [...prev, { role: 'model', text: outOfScopeMsg }]);
-        setIsLoading(false);
-        debug.groupEnd();
-        return;
-      }
-
-      // Check if we're in a booking flow
+      // Regular chat flow - let model handle all validation via system prompt
+      
+      // ========== NEW USE CASES (5 features) ==========
       if (bookingState.step === 'route_detected') {
         // Ask for transport method
         debug.log('APP', 'Booking flow: asking for transport method');
