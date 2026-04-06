@@ -86,18 +86,30 @@ Day 1:
 Day 2:
 - ...
 
-💸 Estimated Cost:
+💸 Estimated Cost (kèm link booking):
 - Flight:
 - Hotel:
 - Food + Activities:
 
 ⚠️ Notes: ...
 
+## Booking Links Rules
+Luôn cung cấp link booking thực tế nếu tìm được, hoặc dùng các link mẫu sau:
+- **Chuyến bay**: 
+    - [Vietnam Airlines](https://www.vietnamairlines.com/)
+    - [Vietjet Air](https://www.vietjetair.com/)
+    - [Bamboo Airways](https://www.bambooairways.com/)
+- **Khách sạn**:
+    - [Booking.com](https://www.booking.com/searchresults.html?ss=) (Thêm tên thành phố sau ss=)
+    - [Agoda](https://www.agoda.com/search?ss=) (Thêm tên thành phố sau ss=)
+    - [Traveloka](https://www.traveloka.com/)
+
 ## Things to Avoid
 - Không hallucinate giá
 - Không bỏ qua constraint user
 - Không trả lời 1-shot khi bài toán multi-step
 - Không tạo itinerary khi thiếu dữ liệu quan trọng
+- Không quên đính kèm link booking ở phần Estimated Cost hoặc Note.
 
 ## Success Criteria
 - Hỏi lại đúng khi thiếu info
@@ -108,20 +120,13 @@ Day 2:
 
 // Brave Search Tool
 export const brave_search = async (query: string): Promise<string> => {
-  debug.log('BRAVE_SEARCH', `Searching for: ${query}`);
-  const apiKey = (process.env as any).BRAVE_SEARCH_API_KEY || "";
+  debug.log('BRAVE_SEARCH', `Searching for: ${query} (via Proxy)`);
   
-  if (!apiKey) {
-    debug.error('BRAVE_SEARCH', 'Missing BRAVE_SEARCH_API_KEY');
-    return "Lỗi: Chưa cấu hình API key cho Brave Search.";
-  }
-
   try {
-    const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}`;
+    const url = `/api/brave/res/v1/web/search?q=${encodeURIComponent(query)}`;
     const response = await fetch(url, {
       headers: {
         "Accept": "application/json",
-        "X-Subscription-Token": apiKey
       }
     });
 
@@ -138,7 +143,7 @@ export const brave_search = async (query: string): Promise<string> => {
     return formattedResults || "Không tìm thấy kết quả tìm kiếm nào.";
   } catch (error) {
     debug.error('BRAVE_SEARCH', 'Search failed', error);
-    return "Lỗi khi thực hiện tìm kiếm trên internet.";
+    return "Lỗi khi thực hiện tìm kiếm qua proxy Server.";
   }
 };
 

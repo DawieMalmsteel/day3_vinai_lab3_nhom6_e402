@@ -29,7 +29,6 @@ import {
   formatHotelsOptionB,
   formatHotelsOptionC,
 } from "../services/hotelService";
-import { isValidTopic, getOutOfScopeMessage } from "../services/contentFilter";
 import { query_knowledge_base } from "../services/gemini";
 import type { TravelBookingState, HotelSearchState } from "../types";
 
@@ -81,13 +80,7 @@ export default function AgentChat() {
     debug.group(`Agent Chat: ${userMessage.substring(0, 50)}...`);
 
     try {
-      // 1. Topic Filtering
-      if (!isValidTopic(userMessage)) {
-        setMessages((prev) => [...prev, { role: "model", text: getOutOfScopeMessage() }]);
-        setIsLoading(false);
-        debug.groupEnd();
-        return;
-      }
+
 
       // 2. Booking State Machine
       if (bookingState.step === "asking_transport") {
