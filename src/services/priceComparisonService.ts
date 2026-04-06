@@ -103,23 +103,30 @@ export const extractPriceComparisonDetails = (message: string): {
     }
   }
   
-  // Fallback: find all cities mentioned in message
+  // If "từ...đến" didn't work, find all cities in order of appearance
   if (!result.origin || !result.destination) {
-    const foundCities: string[] = [];
+    const foundCities: Array<{ city: string; index: number }> = [];
     const sortedKeys = Object.keys(cityMappings).sort((a, b) => b.length - a.length);
     
+    // Find each city and its position in the message
     for (const key of sortedKeys) {
-      if (lowerMsg.includes(key)) {
+      const index = lowerMsg.indexOf(key);
+      if (index !== -1) {
         const normalized = cityMappings[key];
-        if (!foundCities.includes(normalized)) {
-          foundCities.push(normalized);
+        // Only add if we haven't found this city already
+        const exists = foundCities.find(c => c.city === normalized);
+        if (!exists) {
+          foundCities.push({ city: normalized, index });
         }
       }
     }
     
+    // Sort by position in message
+    foundCities.sort((a, b) => a.index - b.index);
+    
     if (foundCities.length >= 2) {
-      result.origin = result.origin || foundCities[0];
-      result.destination = result.destination || foundCities[1];
+      result.origin = result.origin || foundCities[0].city;
+      result.destination = result.destination || foundCities[1].city;
     }
   }
 
