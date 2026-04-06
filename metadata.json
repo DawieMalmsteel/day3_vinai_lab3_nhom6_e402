@@ -1,0 +1,5 @@
+{
+  "name": "AI Travel Agent",
+  "description": "A smart travel assistant that helps you plan trips, find flights, hotels, and optimize your itinerary using ReAct agent capabilities.",
+  "requestFramePermissions": []
+}
