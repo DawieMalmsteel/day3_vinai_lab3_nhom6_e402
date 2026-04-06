@@ -1,23 +1,20 @@
 import express from 'express';
+import cors from 'cors';
 import { scrapeGoogleFlights, closeBrowser } from './scrapers/googleFlightsScraper';
 import type { FlightPrice } from './scrapers/googleFlightsScraper';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(express.json());
+// Enable CORS for all routes with proper configuration
+app.use(cors({
+  origin: true, // Allow requests from any origin
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
-// CORS middleware
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-  } else {
-    next();
-  }
-});
+app.use(express.json());
 
 /**
  * City code mapping for Google Flights
