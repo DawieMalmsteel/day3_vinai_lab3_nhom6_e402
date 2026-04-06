@@ -86,7 +86,7 @@ const getAI = () => new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" }
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const chatWithTravelAgent = async (messages: { role: string; parts: { text: string }[] }[], retryCount = 0): Promise<GenerateContentResponse> => {
-    const model = "gemini-2.0-flash";
+    const model = "gemma-4-26b-a4b-it";
     const MAX_RETRIES = 3;
 
     debug.log('GEMINI', `Calling model: ${model}`, {
