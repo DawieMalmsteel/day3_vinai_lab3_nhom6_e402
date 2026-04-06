@@ -5,12 +5,14 @@ import {
   User,
   Bot,
   Sparkles,
+  Download,
 } from "lucide-react";
 import Markdown from "react-markdown";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { chatWithTravelAgent } from "../services/gemini";
 import { debug } from "../utils/debug";
+import { exportToJson } from "../utils/file";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -75,6 +77,12 @@ export default function GeminiChat() {
       setIsLoading(false);
       debug.groupEnd();
     }
+  };
+
+  const handleDownload = () => {
+    const fileName = `gemini-chat-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
+    exportToJson(messages, fileName);
+    debug.success("GEMINI_UI", "Chat history exported");
   };
 
   return (
@@ -152,6 +160,16 @@ export default function GeminiChat() {
             >
               <Send className="w-5 h-5" />
             </button>
+          </div>
+          <div className="flex justify-end mt-2">
+             <button
+                onClick={handleDownload}
+                disabled={messages.length <= 1}
+                className="flex items-center gap-2 text-[10px] uppercase tracking-wider font-bold text-slate-400 hover:text-blue-600 transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed group"
+              >
+                <Download className="w-3.5 h-3.5 group-hover:transform group-hover:-translate-y-0.5 transition-transform" />
+                <span>Lưu lịch sử (JSON)</span>
+              </button>
           </div>
         </div>
       </footer>

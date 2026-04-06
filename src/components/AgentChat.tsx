@@ -4,6 +4,7 @@ import {
   Loader2,
   User,
   Bot,
+  Download,
 } from "lucide-react";
 import Markdown from "react-markdown";
 import { clsx, type ClassValue } from "clsx";
@@ -25,6 +26,7 @@ import {
   formatHotelsOptionC,
 } from "../services/hotelService";
 import { query_knowledge_base } from "../services/gemini";
+import { exportToJson } from "../utils/file";
 import type { TravelBookingState, HotelSearchState } from "../types";
 
 function cn(...inputs: ClassValue[]) {
@@ -196,6 +198,12 @@ export default function AgentChat() {
     }
   };
 
+  const handleDownload = () => {
+    const fileName = `agent-chat-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json`;
+    exportToJson(messages, fileName);
+    debug.success("AGENT_UI", "Chat history exported");
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-50">
       <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
@@ -224,14 +232,25 @@ export default function AgentChat() {
             <button onClick={handleSend} disabled={isLoading} className="bg-blue-600 text-white p-3 rounded-xl"><Send className="w-5" /></button>
           </div>
           
-          <div className="flex flex-wrap gap-2 mt-4">
-             {bookingState.step === "asking_transport" && (
-                <><button onClick={() => setInput("Máy bay")} className="text-xs bg-blue-50 px-3 py-1 rounded-full">✈️ Máy bay</button>
-                <button onClick={() => setInput("Xe buýt")} className="text-xs bg-slate-50 px-3 py-1 rounded-full">🚌 Xe buýt</button></>
-             )}
-             {bookingState.step === "idle" && ["Đà Lạt", "Đà Nẵng", "Phú Quốc"].map(c => (
-               <button key={c} onClick={() => setInput(`Kế hoạch đi ${c}`)} className="text-xs bg-slate-50 px-3 py-1 rounded-full hover:bg-white">{c}</button>
-             ))}
+          <div className="flex flex-wrap items-center justify-between gap-4 mt-4">
+             <div className="flex flex-wrap gap-2">
+                {bookingState.step === "asking_transport" && (
+                   <><button onClick={() => setInput("Máy bay")} className="text-xs bg-blue-50 px-3 py-1 rounded-full">✈️ Máy bay</button>
+                   <button onClick={() => setInput("Xe buýt")} className="text-xs bg-slate-50 px-3 py-1 rounded-full">🚌 Xe buýt</button></>
+                )}
+                {bookingState.step === "idle" && ["Đà Lạt", "Đà Nẵng", "Phú Quốc"].map(c => (
+                  <button key={c} onClick={() => setInput(`Kế hoạch đi ${c}`)} className="text-xs bg-slate-50 px-3 py-1 rounded-full hover:bg-white">{c}</button>
+                ))}
+             </div>
+             
+             <button
+                onClick={handleDownload}
+                disabled={messages.length <= 1}
+                className="flex items-center gap-2 text-[10px] uppercase tracking-wider font-bold text-slate-400 hover:text-blue-600 transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed group mr-2"
+              >
+                <Download className="w-3.5 h-3.5 group-hover:transform group-hover:-translate-y-0.5 transition-transform" />
+                <span>Lưu lịch sử (JSON)</span>
+              </button>
           </div>
         </div>
       </footer>
