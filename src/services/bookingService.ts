@@ -36,6 +36,20 @@ export interface BookingOption {
   provider: string;
   url: string;
   transport: "flight" | "bus";
+  flightNumber?: string;
+  departureDate?: string;
+  departureTime?: string;
+  arrivalTime?: string;
+  priceFrom?: string;
+  originAirport?: string;
+  destinationAirport?: string;
+}
+
+export interface SearchFlightsInput {
+  originCity: string;
+  destinationCity: string;
+  departureDate?: string;
+  passengers: number;
 }
 
 export type BookingStep = "waiting_route" | "waiting_transport" | "waiting_passengers" | "complete";
@@ -49,6 +63,73 @@ export interface TravelBookingState {
   passengers: number | null;
   step: BookingStep;
 }
+
+interface AirportInfo {
+  code: string;
+  name: string;
+  city: string;
+}
+
+interface FlightSchedule {
+  airline: string;
+  flightNumber: string;
+  departureTime: string;
+  arrivalTime: string;
+  priceFrom: string;
+}
+
+const AIRPORTS_BY_CITY: Record<string, AirportInfo> = {
+  "hà nội": { code: "HAN", name: "Nội Bài (HAN)", city: "Hà Nội" },
+  "hồ chí minh": { code: "SGN", name: "Tân Sơn Nhất (SGN)", city: "Hồ Chí Minh" },
+  "đà nẵng": { code: "DAD", name: "Đà Nẵng (DAD)", city: "Đà Nẵng" },
+  "đà lạt": { code: "DLI", name: "Liên Khương (DLI)", city: "Đà Lạt" },
+  "phú quốc": { code: "PQC", name: "Phú Quốc (PQC)", city: "Phú Quốc" },
+  "huế": { code: "HUI", name: "Phú Bài (HUI)", city: "Huế" },
+  "hải phòng": { code: "HPH", name: "Cát Bi (HPH)", city: "Hải Phòng" },
+  "nha trang": { code: "CXR", name: "Cam Ranh (CXR)", city: "Nha Trang" },
+  "cần thơ": { code: "VCA", name: "Cần Thơ (VCA)", city: "Cần Thơ" },
+  "vinh": { code: "VII", name: "Vinh (VII)", city: "Vinh" },
+};
+
+const FLIGHT_SCHEDULES: Record<string, FlightSchedule[]> = {
+  "SGN-DAD": [
+    { airline: "Vietnam Airlines", flightNumber: "VN122", departureTime: "06:00", arrivalTime: "07:25", priceFrom: "1.050.000 VNĐ" },
+    { airline: "Vietjet Air", flightNumber: "VJ512", departureTime: "09:35", arrivalTime: "11:00", priceFrom: "890.000 VNĐ" },
+    { airline: "Bamboo Airways", flightNumber: "QH153", departureTime: "14:20", arrivalTime: "15:45", priceFrom: "980.000 VNĐ" },
+    { airline: "Vietnam Airlines", flightNumber: "VN136", departureTime: "18:10", arrivalTime: "19:35", priceFrom: "1.150.000 VNĐ" },
+  ],
+  "SGN-PQC": [
+    { airline: "Vietnam Airlines", flightNumber: "VN1823", departureTime: "07:15", arrivalTime: "08:20", priceFrom: "1.240.000 VNĐ" },
+    { airline: "Vietjet Air", flightNumber: "VJ325", departureTime: "11:00", arrivalTime: "12:05", priceFrom: "1.020.000 VNĐ" },
+    { airline: "Bamboo Airways", flightNumber: "QH1921", departureTime: "16:40", arrivalTime: "17:45", priceFrom: "1.180.000 VNĐ" },
+  ],
+  "SGN-DLI": [
+    { airline: "Vietnam Airlines", flightNumber: "VN1380", departureTime: "08:00", arrivalTime: "08:55", priceFrom: "1.090.000 VNĐ" },
+    { airline: "Vietjet Air", flightNumber: "VJ365", departureTime: "13:25", arrivalTime: "14:20", priceFrom: "910.000 VNĐ" },
+    { airline: "Bamboo Airways", flightNumber: "QH1120", departureTime: "19:30", arrivalTime: "20:25", priceFrom: "990.000 VNĐ" },
+  ],
+  "HAN-DAD": [
+    { airline: "Vietnam Airlines", flightNumber: "VN171", departureTime: "06:35", arrivalTime: "07:55", priceFrom: "1.120.000 VNĐ" },
+    { airline: "Vietjet Air", flightNumber: "VJ503", departureTime: "10:25", arrivalTime: "11:45", priceFrom: "920.000 VNĐ" },
+    { airline: "Bamboo Airways", flightNumber: "QH103", departureTime: "15:10", arrivalTime: "16:30", priceFrom: "1.010.000 VNĐ" },
+    { airline: "Vietnam Airlines", flightNumber: "VN187", departureTime: "20:05", arrivalTime: "21:25", priceFrom: "1.190.000 VNĐ" },
+  ],
+  "HAN-PQC": [
+    { airline: "Vietnam Airlines", flightNumber: "VN1235", departureTime: "09:10", arrivalTime: "11:20", priceFrom: "1.650.000 VNĐ" },
+    { airline: "Vietjet Air", flightNumber: "VJ451", departureTime: "14:45", arrivalTime: "16:55", priceFrom: "1.390.000 VNĐ" },
+    { airline: "Bamboo Airways", flightNumber: "QH1615", departureTime: "18:20", arrivalTime: "20:30", priceFrom: "1.480.000 VNĐ" },
+  ],
+  "DAD-HAN": [
+    { airline: "Vietnam Airlines", flightNumber: "VN180", departureTime: "07:00", arrivalTime: "08:20", priceFrom: "1.080.000 VNĐ" },
+    { airline: "Vietjet Air", flightNumber: "VJ506", departureTime: "12:05", arrivalTime: "13:25", priceFrom: "900.000 VNĐ" },
+    { airline: "Bamboo Airways", flightNumber: "QH110", departureTime: "17:55", arrivalTime: "19:15", priceFrom: "990.000 VNĐ" },
+  ],
+  "DAD-SGN": [
+    { airline: "Vietnam Airlines", flightNumber: "VN129", departureTime: "06:50", arrivalTime: "08:15", priceFrom: "1.060.000 VNĐ" },
+    { airline: "Vietjet Air", flightNumber: "VJ517", departureTime: "11:40", arrivalTime: "13:05", priceFrom: "880.000 VNĐ" },
+    { airline: "Bamboo Airways", flightNumber: "QH160", departureTime: "19:00", arrivalTime: "20:25", priceFrom: "960.000 VNĐ" },
+  ],
+};
 
 /**
  * Normalize city name to standard format
@@ -231,6 +312,130 @@ export const parseBookingResponse = (
   return update;
 };
 
+const toolGetAirportByCity = (city: string): AirportInfo | null => {
+  const normalized = normalizeCityName(city).toLowerCase();
+  return AIRPORTS_BY_CITY[normalized] || null;
+};
+
+const toolGetFlightSchedulesByRoute = (
+  from: string,
+  to: string,
+): FlightSchedule[] => {
+  const fromAirport = toolGetAirportByCity(from);
+  const toAirport = toolGetAirportByCity(to);
+
+  if (!fromAirport || !toAirport) {
+    return [];
+  }
+
+  const routeKey = `${fromAirport.code}-${toAirport.code}`;
+  return FLIGHT_SCHEDULES[routeKey] || [];
+};
+
+const toolSearchFlightOptions = (
+  from: string,
+  to: string,
+  passengers: number,
+  departureDate?: string,
+): BookingOption[] => {
+  const fromAirport = toolGetAirportByCity(from);
+  const toAirport = toolGetAirportByCity(to);
+  const schedules = toolGetFlightSchedulesByRoute(from, to);
+
+  if (!fromAirport || !toAirport || schedules.length === 0) {
+    return [];
+  }
+
+  return schedules.map((flight) => {
+    const provider = flight.airline;
+    const baseUrl =
+      provider === "Vietnam Airlines"
+        ? "https://www.vietnamairlines.com/en/book"
+        : provider === "Vietjet Air"
+          ? "https://www.vietjetair.com/"
+          : "https://www.bambooairways.com/booking";
+
+    return {
+      provider,
+      transport: "flight",
+      flightNumber: flight.flightNumber,
+      departureDate,
+      departureTime: flight.departureTime,
+      arrivalTime: flight.arrivalTime,
+      priceFrom: flight.priceFrom,
+      originAirport: fromAirport.name,
+      destinationAirport: toAirport.name,
+      url: `${baseUrl}?from=${fromAirport.code}&to=${toAirport.code}&passengers=${passengers}${
+        departureDate ? `&date=${departureDate}` : ""
+      }`,
+    };
+  });
+};
+
+export const searchFlightsTool = (input: SearchFlightsInput): BookingOption[] => {
+  debug.log("BOOKING_TOOL", "search_flights called", input);
+  return toolSearchFlightOptions(
+    input.originCity,
+    input.destinationCity,
+    input.passengers,
+    input.departureDate,
+  );
+};
+
+/**
+ * Parse departure date from message.
+ * Supports:
+ * - YYYY-MM-DD (2026-04-20)
+ * - DD/MM/YYYY or DD-MM-YYYY
+ * - Relative Vietnamese words: hôm nay, ngày mai, mốt
+ */
+export const parseDepartureDate = (message: string): string | null => {
+  const lower = message.toLowerCase().trim();
+
+  if (lower.includes("hôm nay")) {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  if (lower.includes("ngày mai")) {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+
+  if (lower.includes("ngày mốt") || lower.includes("mốt")) {
+    const d = new Date();
+    d.setDate(d.getDate() + 2);
+    return d.toISOString().slice(0, 10);
+  }
+
+  const isoMatch = lower.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]);
+    const day = Number(isoMatch[3]);
+    if (year >= 2024 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return `${year.toString().padStart(4, "0")}-${month
+        .toString()
+        .padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+    }
+  }
+
+  const vnMatch = lower.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](20\d{2}))?\b/);
+  if (vnMatch) {
+    const now = new Date();
+    const day = Number(vnMatch[1]);
+    const month = Number(vnMatch[2]);
+    const year = vnMatch[3] ? Number(vnMatch[3]) : now.getFullYear();
+    if (year >= 2024 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return `${year.toString().padStart(4, "0")}-${month
+        .toString()
+        .padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+    }
+  }
+
+  return null;
+};
+
 /**
  * Search booking links using Gemini
  */
@@ -239,9 +444,26 @@ export const searchBookingLinks = async (
   to: string,
   transport: "flight" | "bus",
   passengers: number
+  ,
+  departureDate?: string,
 ): Promise<BookingOption[]> => {
   debug.group(`Searching booking links`);
   debug.log("BOOKING", `Route: ${from} → ${to}, Transport: ${transport}, Passengers: ${passengers}`);
+
+  if (transport === "flight") {
+    const toolFlightOptions = searchFlightsTool({
+      originCity: from,
+      destinationCity: to,
+      departureDate,
+      passengers,
+    });
+    if (toolFlightOptions.length > 0) {
+      debug.success("BOOKING", `Tool flight search found ${toolFlightOptions.length} options`);
+      debug.groupEnd();
+      return toolFlightOptions;
+    }
+    debug.warn("BOOKING", "Tool flight search found no route data, falling back to model");
+  }
 
   try {
     const fromCode = VIETNAM_CITIES[from.toLowerCase()]?.code || from;
@@ -249,7 +471,9 @@ export const searchBookingLinks = async (
 
     const prompt = `Generate ${passengers} passenger ${transport} booking links for travel from ${from} to ${to}.
     Return ONLY a JSON array with this format (no markdown, no extra text):
-    [{"provider":"Airline/Bus Company Name","url":"https://booking.url?from=${fromCode}&to=${toCode}&passengers=${passengers}","transport":"${transport}"}]
+    [{"provider":"Airline/Bus Company Name","url":"https://booking.url?from=${fromCode}&to=${toCode}&passengers=${passengers}${
+      departureDate ? `&date=${departureDate}` : ""
+    }","transport":"${transport}"}]
     
     For flights: Include Vietnam Airlines, Vietjet, Bamboo Airways, AirAsia
     For buses: Include Futa, SaiGon Coach, Vietnam Coach, Camel Bus
@@ -354,10 +578,25 @@ export const formatBookingOptions = (options: BookingOption[]): string => {
 
   const lines = [
     "🎫 **Các tùy chọn đặt vé cho bạn:**\n",
-    ...options.map(
-      (opt, idx) =>
-        `${idx + 1}. **${opt.provider}** - [Đặt vé ngay](${opt.url})`
-    ),
+    ...options.map((opt, idx) => {
+      if (
+        opt.transport === "flight" &&
+        opt.flightNumber &&
+        opt.departureDate &&
+        opt.departureTime &&
+        opt.originAirport &&
+        opt.destinationAirport
+      ) {
+        return `${idx + 1}. **${opt.provider}** (${opt.flightNumber}) - [Đặt vé ngay](${opt.url})
+   - Ngày bay: **${opt.departureDate}**
+   - Khởi hành: **${opt.departureTime}**
+   - Hạ cánh dự kiến: **${opt.arrivalTime || 'Đang cập nhật'}**
+   - Chặng bay: **${opt.originAirport} → ${opt.destinationAirport}**
+   - Giá tham khảo: **${opt.priceFrom || 'Liên hệ hãng'}**`;
+      }
+
+      return `${idx + 1}. **${opt.provider}** - [Đặt vé ngay](${opt.url})`;
+    }),
     "\nNhấp vào liên kết để hoàn tất đặt chỗ. Chúc bạn có chuyến đi vui vẻ!",
   ];
 

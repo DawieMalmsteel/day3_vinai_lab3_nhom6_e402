@@ -5,8 +5,8 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { chatWithTravelAgent, query_knowledge_base } from './services/gemini';
 import { debug } from './utils/debug';
-import { detectRoute, parseTransport, parsePassengerCount, searchBookingLinks, formatBookingOptions } from './services/bookingService';
-import { detectHotelSearch, searchHotels, formatHotelsOptionA, formatHotelsOptionB, formatHotelsOptionC } from './services/hotelService';
+import { detectRoute, parseTransport, parsePassengerCount, parseDepartureDate, searchBookingLinks, formatBookingOptions, searchFlightsTool } from './services/bookingService';
+import { detectHotelSearch, searchHotelsTool, formatHotelsOptionA, formatHotelsOptionB, formatHotelsOptionC } from './services/hotelService';
 import { isValidTopic, getOutOfScopeMessage } from './services/contentFilter';
 import type { TravelBookingState, HotelSearchState } from './types';
 
@@ -20,6 +20,51 @@ interface ChatMessage {
   isPlanning?: boolean;
   sources?: { uri: string; title: string }[];
 }
+
+type ReActActionName = 'search_flights' | 'search_hotels' | 'finish';
+
+interface ReActAction {
+  action: ReActActionName;
+  actionInput?: Record<string, unknown>;
+  final?: string;
+}
+
+const REACT_CONTROLLER_SYSTEM = `Bạn là ReAct controller cho trợ lý du lịch.
+Nhiệm vụ: chọn công cụ hoặc kết thúc.
+Tools có sẵn:
+1) search_flights: cần originCity, destinationCity, departureDate (YYYY-MM-DD, optional), passengers (number)
+2) search_hotels: cần city, guests (optional), budget (budget|mid|luxury, optional), locationPreference (beach|city|quiet|budget, optional), checkinDate/checkoutDate (optional)
+3) finish: khi đủ dữ liệu để trả lời user
+
+Bạn PHẢI trả về duy nhất 1 JSON object hợp lệ, không markdown, không giải thích.
+Schema:
+{"action":"search_flights","actionInput":{"originCity":"...","destinationCity":"...","departureDate":"...","passengers":2}}
+{"action":"search_hotels","actionInput":{"city":"...","guests":2}}
+{"action":"finish","final":"..."}
+
+Ưu tiên:
+- Nếu user hỏi chuyến bay/giá vé/giờ bay => gọi search_flights trước.
+- Nếu user hỏi khách sạn => gọi search_hotels trước.
+- Khi đã có observation tool hoặc không cần tool, trả finish bằng tiếng Việt ngắn gọn.`;
+
+const parseReActAction = (raw: string): ReActAction | null => {
+  const text = raw.trim();
+  if (!text) return null;
+
+  try {
+    const parsed = JSON.parse(text) as ReActAction;
+    return parsed?.action ? parsed : null;
+  } catch {
+    const objectMatch = text.match(/\{[\s\S]*\}/);
+    if (!objectMatch) return null;
+    try {
+      const parsed = JSON.parse(objectMatch[0]) as ReActAction;
+      return parsed?.action ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+};
 
 export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -62,20 +107,48 @@ export default function App() {
       }
 
       // Check if we're in a booking flow
-      if (bookingState.step === 'route_detected') {
+      if (bookingState.step === 'asking_transport') {
         // Ask for transport method
         debug.log('APP', 'Booking flow: asking for transport method');
         const transport = parseTransport(userMessage);
         if (transport) {
-          setBookingState(prev => ({ ...prev, transportMethod: transport, step: 'asking_passengers' }));
+          if (transport === 'flight') {
+            setBookingState(prev => ({ ...prev, transportMethod: transport, step: 'asking_date' }));
+            setMessages(prev => [...prev, { 
+              role: 'model', 
+              text: 'Bạn muốn bay ngày nào? (ví dụ: `2026-04-20`, `20/04/2026`, `ngày mai`)' 
+            }]);
+          } else {
+            setBookingState(prev => ({ ...prev, transportMethod: transport, step: 'asking_passengers' }));
+            setMessages(prev => [...prev, { 
+              role: 'model', 
+              text: `Bạn chọn xe buýt. Bây giờ, bạn muốn đặt vé cho mấy người?` 
+            }]);
+          }
+          setIsLoading(false);
+          debug.groupEnd();
+          return;
+        }
+      } else if (bookingState.step === 'asking_date') {
+        debug.log('APP', 'Booking flow: asking for departure date');
+        const departureDate = parseDepartureDate(userMessage);
+        if (departureDate) {
+          setBookingState(prev => ({ ...prev, departureDate, step: 'asking_passengers' }));
           setMessages(prev => [...prev, { 
             role: 'model', 
-            text: `Bạn chọn ${transport === 'flight' ? 'chuyến bay' : 'xe buýt'}. Bây giờ, bạn muốn đặt vé cho mấy người?` 
+            text: `Đã ghi nhận ngày bay **${departureDate}**. Bạn muốn đặt vé cho mấy người?` 
           }]);
           setIsLoading(false);
           debug.groupEnd();
           return;
         }
+        setMessages(prev => [...prev, {
+          role: 'model',
+          text: 'Mình chưa đọc được ngày bay. Bạn nhập theo dạng `YYYY-MM-DD` hoặc `DD/MM/YYYY` nhé.',
+        }]);
+        setIsLoading(false);
+        debug.groupEnd();
+        return;
       } else if (bookingState.step === 'asking_passengers') {
         // Ask for passenger count
         debug.log('APP', 'Booking flow: asking for passenger count');
@@ -94,7 +167,8 @@ export default function App() {
               bookingState.originCity!,
               bookingState.destinationCity!,
               bookingState.transportMethod!,
-              passengerCount
+              passengerCount,
+              bookingState.departureDate,
             );
 
             setMessages(prev => prev.filter(m => !m.isPlanning));
@@ -137,7 +211,19 @@ export default function App() {
           debug.log('APP', `Hotel search: selected type ${selectedType}`);
           setHotelState(prev => ({ ...prev, searchType: selectedType, step: 'searching' }));
 
-          const hotels = searchHotels(hotelState.city);
+          const hotelResults = searchHotelsTool({
+            city: hotelState.city,
+            guests: 2,
+          });
+          const hotels = hotelResults.map((h) => ({
+            id: h.id,
+            name: h.name,
+            city: h.city,
+            url: h.bookingUrl,
+            pricePerNight: h.pricePerNight,
+            rating: h.rating,
+            location: h.location,
+          }));
           let formattedResult = '';
           
           if (selectedType === 'quick') {
@@ -219,15 +305,106 @@ export default function App() {
       }
 
       // Convert messages to Gemini format
-      let chatHistory = messages.map(m => ({
+      const baseHistory = messages.map(m => ({
         role: m.role,
         parts: [{ text: m.text }]
       }));
-      chatHistory.push({ role: 'user', parts: [{ text: enhancedMessage }] });
+      const toolObservations: string[] = [];
+      let reactFinalText: string | null = null;
+
+      for (let step = 0; step < 3; step += 1) {
+        const controllerPrompt = [
+          `USER_QUERY: ${enhancedMessage}`,
+          `CONTEXT_MESSAGES: ${JSON.stringify(messages.slice(-6).map((m) => ({ role: m.role, text: m.text })))}`,
+          toolObservations.length > 0
+            ? `OBSERVATIONS:\n${toolObservations.join('\n')}`
+            : 'OBSERVATIONS: (none)',
+          'Hãy trả về quyết định JSON theo schema đã định.',
+        ].join('\n\n');
+
+        const controllerResponse = await chatWithTravelAgent(
+          [{ role: 'user', parts: [{ text: controllerPrompt }] }],
+          0,
+          REACT_CONTROLLER_SYSTEM,
+        );
+        const action = parseReActAction(controllerResponse.text || '');
+
+        if (!action) {
+          debug.warn('REACT', 'Controller output is not parseable JSON, stopping tool loop');
+          break;
+        }
+
+        debug.log('REACT', `Step ${step + 1} action: ${action.action}`, action.actionInput);
+
+        if (action.action === 'finish') {
+          reactFinalText = action.final || null;
+          break;
+        }
+
+        if (action.action === 'search_flights') {
+          const input = action.actionInput || {};
+          const originCity = String(input.originCity || detectRoute(userMessage).from || '');
+          const destinationCity = String(input.destinationCity || detectRoute(userMessage).to || '');
+          const departureDate = String(input.departureDate || parseDepartureDate(userMessage) || '');
+          const passengers = Number(input.passengers || parsePassengerCount(userMessage) || 1);
+
+          if (originCity && destinationCity) {
+            const flightResults = searchFlightsTool({
+              originCity,
+              destinationCity,
+              departureDate: departureDate || undefined,
+              passengers: Number.isFinite(passengers) && passengers > 0 ? passengers : 1,
+            });
+            toolObservations.push(
+              `search_flights(${originCity}, ${destinationCity}, ${departureDate || 'N/A'}, ${passengers}) => ${JSON.stringify(flightResults.slice(0, 5))}`
+            );
+            continue;
+          }
+
+          toolObservations.push('search_flights => thiếu origin/destination, không thực thi được');
+          continue;
+        }
+
+        if (action.action === 'search_hotels') {
+          const input = action.actionInput || {};
+          const cityFromQuery = detectHotelSearch(userMessage);
+          const city = String(input.city || (cityFromQuery && cityFromQuery !== 'general' ? cityFromQuery : ''));
+
+          if (city) {
+            const hotelResults = searchHotelsTool({
+              city,
+              guests: Number(input.guests || 2),
+              checkinDate: typeof input.checkinDate === 'string' ? input.checkinDate : undefined,
+              checkoutDate: typeof input.checkoutDate === 'string' ? input.checkoutDate : undefined,
+              budget: input.budget as 'budget' | 'mid' | 'luxury' | undefined,
+              locationPreference: input.locationPreference as 'beach' | 'city' | 'quiet' | 'budget' | undefined,
+            });
+            toolObservations.push(
+              `search_hotels(${city}) => ${JSON.stringify(hotelResults.slice(0, 5))}`
+            );
+            continue;
+          }
+
+          toolObservations.push('search_hotels => thiếu city, không thực thi được');
+          continue;
+        }
+      }
+
+      if (reactFinalText) {
+        setMessages(prev => [...prev, { role: 'model', text: reactFinalText }]);
+        debug.success('REACT', 'Final response generated directly by ReAct controller');
+        return;
+      }
+
+      const finalUserPrompt = toolObservations.length > 0
+        ? `${enhancedMessage}\n\n[Tool observations]\n${toolObservations.join('\n')}\n\nDựa trên observations, trả lời ngắn gọn bằng tiếng Việt và hỏi 1 câu follow-up.`
+        : enhancedMessage;
+
+      const chatHistory = [...baseHistory, { role: 'user', parts: [{ text: finalUserPrompt }] }];
 
       debug.log('APP', `Calling model with ${chatHistory.length} messages`);
 
-      // Single API call - no tools, no ReAct loop
+      // Final synthesis after ReAct tool loop
       const response = await chatWithTravelAgent(chatHistory);
       const modelText = response.text || "Xin lỗi, tôi gặp sự cố khi xử lý yêu cầu của bạn.";
 
@@ -410,6 +587,23 @@ export default function App() {
                     className="text-xs font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-full transition-all"
                   >
                     {num} {num === 1 ? 'người' : 'người'}
+                  </button>
+                ))}
+              </>
+            )}
+            {bookingState.step === 'asking_date' && (
+              <>
+                {[
+                  { label: 'Hôm nay', value: 'hôm nay' },
+                  { label: 'Ngày mai', value: 'ngày mai' },
+                  { label: '20/04/2026', value: '20/04/2026' },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    onClick={() => setInput(item.value)}
+                    className="text-xs font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-full transition-all"
+                  >
+                    {item.label}
                   </button>
                 ))}
               </>

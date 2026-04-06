@@ -37,13 +37,14 @@ export interface BookingOption {
   departureTime?: string;
 }
 
-export type BookingStep = 'idle' | 'route_detected' | 'asking_transport' | 'asking_passengers' | 'searching';
+export type BookingStep = 'idle' | 'route_detected' | 'asking_transport' | 'asking_date' | 'asking_passengers' | 'searching';
 
 export interface TravelBookingState {
   step: BookingStep;
   originCity?: string;
   destinationCity?: string;
   transportMethod?: 'flight' | 'bus' | null;
+  departureDate?: string;
   passengerCount?: number;
   bookingResults?: BookingOption[];
 }

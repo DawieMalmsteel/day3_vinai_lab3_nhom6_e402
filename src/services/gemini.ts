@@ -85,23 +85,7 @@ const getAI = () => new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export const chatWithTravelAgent = async (messages: { role: string; parts: { text: string }[] }[], retryCount = 0): Promise<GenerateContentResponse> => {
-    const model = "gemma-4-26b-a4b-it";
-    const MAX_RETRIES = 3;
-
-    debug.log('GEMINI', `Calling model: ${model}`, {
-        messageCount: messages.length,
-        retryCount,
-        lastMessageRole: messages[messages.length - 1]?.role,
-    });
-
-    try {
-        const ai = getAI();
-        const response = await ai.models.generateContent({
-            model,
-            contents: messages,
-            config: {
-                systemInstruction: `Bạn là một Chuyên gia Tư vấn Du lịch AI chuyên nghiệp, thân thiện và hữu ích.
+const DEFAULT_SYSTEM_INSTRUCTION = `Bạn là một Chuyên gia Tư vấn Du lịch AI chuyên nghiệp, thân thiện và hữu ích.
 
 ## 👋 GREETING & WELCOME:
 Khi user chào hỏi (xin chào, chào, hello, etc.):
@@ -162,7 +146,29 @@ Bot: "Xin lỗi, tôi chuyên về du lịch và không có thông tin về nhà
 - Đổ scope list khi user chỉ nói chào
 - Danh sách dài 10+ mục
 - Mô tả chi tiết từng hãng
-- Hỏi lại câu người dùng vừa trả lời`,
+- Hỏi lại câu người dùng vừa trả lời`;
+
+export const chatWithTravelAgent = async (
+    messages: { role: string; parts: { text: string }[] }[],
+    retryCount = 0,
+    systemInstruction = DEFAULT_SYSTEM_INSTRUCTION,
+): Promise<GenerateContentResponse> => {
+    const model = "gemma-4-26b-a4b-it";
+    const MAX_RETRIES = 3;
+
+    debug.log('GEMINI', `Calling model: ${model}`, {
+        messageCount: messages.length,
+        retryCount,
+        lastMessageRole: messages[messages.length - 1]?.role,
+    });
+
+    try {
+        const ai = getAI();
+        const response = await ai.models.generateContent({
+            model,
+            contents: messages,
+            config: {
+                systemInstruction,
             },
         });
 
@@ -182,7 +188,7 @@ Bot: "Xin lỗi, tôi chuyên về du lịch và không có thông tin về nhà
             const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 1000;
             debug.warn('GEMINI', `Retrying in ${delay}ms...`, { isRateLimit, isTransient });
             await sleep(delay);
-            return chatWithTravelAgent(messages, retryCount + 1);
+            return chatWithTravelAgent(messages, retryCount + 1, systemInstruction);
         }
 
         throw error;

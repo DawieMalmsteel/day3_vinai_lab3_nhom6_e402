@@ -105,6 +105,44 @@ const HOTEL_DATABASE: Record<string, HotelOption[]> = {
   ],
 };
 
+export interface SearchHotelsInput {
+  city: string;
+  checkinDate?: string;
+  checkoutDate?: string;
+  guests?: number;
+  budget?: 'budget' | 'mid' | 'luxury';
+  locationPreference?: HotelLocation;
+}
+
+export interface HotelSearchToolResult {
+  id: string;
+  name: string;
+  city: string;
+  location: HotelLocation;
+  pricePerNight: string;
+  rating: number;
+  amenities: string[];
+  bookingUrl: string;
+  checkinDate?: string;
+  checkoutDate?: string;
+  guests?: number;
+}
+
+const getAmenitiesByLocation = (location: HotelLocation): string[] => {
+  switch (location) {
+    case 'beach':
+      return ['Gần biển', 'Hồ bơi', 'Ăn sáng'];
+    case 'city':
+      return ['Gần trung tâm', 'Wifi', 'Bãi đậu xe'];
+    case 'quiet':
+      return ['Yên tĩnh', 'Vườn', 'Phù hợp nghỉ dưỡng'];
+    case 'budget':
+      return ['Giá tốt', 'Cơ bản đầy đủ', 'Phòng sạch'];
+    default:
+      return ['Tiện nghi cơ bản'];
+  }
+};
+
 /**
  * OPTION A: Quick search - just 2-3 hotels with link + price
  */
@@ -238,6 +276,30 @@ export const searchHotels = (
 
   debug.success('HOTEL', `Found ${results.length} hotels`);
   return results;
+};
+
+export const searchHotelsTool = (input: SearchHotelsInput): HotelSearchToolResult[] => {
+  debug.log('HOTEL_TOOL', 'search_hotels called', input);
+
+  const hotels = searchHotels(
+    input.city,
+    input.locationPreference,
+    input.budget,
+  );
+
+  return hotels.map((hotel) => ({
+    id: hotel.id,
+    name: hotel.name,
+    city: hotel.city,
+    location: hotel.location,
+    pricePerNight: hotel.pricePerNight,
+    rating: hotel.rating,
+    amenities: getAmenitiesByLocation(hotel.location),
+    bookingUrl: hotel.url,
+    checkinDate: input.checkinDate,
+    checkoutDate: input.checkoutDate,
+    guests: input.guests,
+  }));
 };
 
 /**
