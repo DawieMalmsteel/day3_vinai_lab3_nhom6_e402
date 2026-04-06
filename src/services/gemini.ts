@@ -24,7 +24,7 @@ export const query_knowledge_base = async (location: string, query: string): Pro
 
     try {
         debug.log('QUERY_KB', `Fetching file: ${fileName}`);
-        const response = await fetch(`/public/data/guides/${fileName}`);
+        const response = await fetch(`/data/guides/${fileName}`);
         if (!response.ok) throw new Error("File not found");
         const content = await response.text();
         debug.success('QUERY_KB', `Retrieved ${content.length} characters from ${fileName}`);

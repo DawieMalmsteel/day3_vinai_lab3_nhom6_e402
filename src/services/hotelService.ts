@@ -168,7 +168,7 @@ export const formatHotelsOptionC = (hotels: HotelOption[]): string => {
   const lines = [
     `🏨 **Khách sạn ${city} - Tìm kiếm chi tiết:**\n`,
     ...topHotels.map((h) => {
-      const locationLabel = locationLabels[h.location] || '📍 Vị trí đa dạng';
+      const locationLabel = locationLabels[h.location as string] || '📍 Vị trí đa dạng';
       return `**[${h.name}](${h.url})**\n${locationLabel} • ${h.pricePerNight}/đêm • ${'⭐'.repeat(Math.floor(h.rating))}`;
     }),
     `\n📌 Bạn muốn đặt phòng hoặc tìm thêm?`,
