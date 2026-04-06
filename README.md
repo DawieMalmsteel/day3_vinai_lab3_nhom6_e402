@@ -1,17 +1,13 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
-
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/0b497ab6-ddd8-4b74-97cf-c63d7df282d6
+- Nguyễn Anh Quân vẽ workflow filter cho user và tối ưu system prompt
+- Trần Sơn làm về search hotel system prompt
+- Phạm Đăng Phong debug log AI
+- Anh Sơn thêm provider Gemini bên thứ 3
+- Phạm Minh Khang thêm provider Openrouter cho app, thêm brave search cho app
+- Phan Dương Định init projects, tạo giao diện, thêm connect Gemini AI cho app, ghi đè system prompt, access websearch, thêm thông tin ban đầu cho chat nếu user thiếu thông tin phải hỏi thêm
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
+**Prerequisites:**  `[nodejs](https://nodejs.org/en/download)`
 
 1. Install dependencies:
    `npm install`
