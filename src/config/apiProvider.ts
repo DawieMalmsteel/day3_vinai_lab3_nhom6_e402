@@ -11,7 +11,7 @@ export type ApiProvider = 'google' | 'shopaikey';
 // ─────────────────────────────────────────────────────────────────
 // ★ ĐỔI Ở ĐÂY để chuyển provider
 // ─────────────────────────────────────────────────────────────────
-export const ACTIVE_PROVIDER: ApiProvider = 'shopaikey';
+export const ACTIVE_PROVIDER: ApiProvider = 'google';
 // ─────────────────────────────────────────────────────────────────
 
 // Model muốn dùng
