@@ -1,5 +1,6 @@
 import { debug } from '../utils/debug';
 import { getCurrentDateFormatted } from '../utils/dateUtils';
+import { getFlightPrices, generateGoogleFlightsLink, generateAirlineBookingLinks } from './googleFlightsService';
 import type { PriceComparisonResult, FlightPrice } from '../types';
 
 /**
@@ -65,39 +66,61 @@ export const extractPriceComparisonDetails = (message: string): {
 };
 
 /**
- * Compare flight prices
+ * Compare flight prices using Google Flights scraper
  */
-export const comparePrices = (origin: string, destination: string, date?: string): PriceComparisonResult => {
+export const comparePrices = async (origin: string, destination: string, date?: string): Promise<PriceComparisonResult> => {
   const finalDate = date || getCurrentDateFormatted();
   debug.log('PRICE_COMPARISON', `Comparing prices for ${origin} → ${destination}`, finalDate);
 
-  const routeKey = `${origin}-${destination}`.toLowerCase();
-  const flights = flightDatabase[routeKey] || [
-    { airline: 'Vietnam Airlines', price: 850000, departureTime: '07:00', arrivalTime: '09:00', duration: '2h', rating: 4.8 },
-    { airline: 'Vietjet', price: 480000, departureTime: '10:00', arrivalTime: '12:00', duration: '2h', rating: 4.2 },
-    { airline: 'Bamboo Airways', price: 680000, departureTime: '14:00', arrivalTime: '16:00', duration: '2h', rating: 4.7 },
-  ];
+  try {
+    // Try to get real prices from Google Flights
+    const flights = await getFlightPrices(origin, destination, finalDate);
 
-  // Find cheapest and best value
-  const sortedByPrice = [...flights].sort((a, b) => a.price - b.price);
-  const cheapest = sortedByPrice[0];
-  
-  const sortedByValue = [...flights].sort((a, b) => (b.rating / b.price) - (a.rating / a.price));
-  const bestValue = sortedByValue[0];
+    // Find cheapest and best value
+    const sortedByPrice = [...flights].sort((a, b) => a.price - b.price);
+    const cheapest = sortedByPrice[0];
+    
+    const sortedByValue = [...flights].sort((a, b) => (b.rating / b.price) - (a.rating / a.price));
+    const bestValue = sortedByValue[0];
 
-  return {
-    route: `${origin} → ${destination}`,
-    date: finalDate,
-    flights,
-    cheapest,
-    bestValue,
-  };
+    return {
+      route: `${origin} → ${destination}`,
+      date: finalDate,
+      flights,
+      cheapest,
+      bestValue,
+    };
+  } catch (error) {
+    debug.error('PRICE_COMPARISON', 'Error comparing prices', error);
+    
+    // Fallback to mock data
+    const routeKey = `${origin}-${destination}`.toLowerCase();
+    const fallbackFlights = flightDatabase[routeKey] || [
+      { airline: 'Vietnam Airlines', price: 850000, departureTime: '07:00', arrivalTime: '09:00', duration: '2h', rating: 4.8 },
+      { airline: 'Vietjet', price: 480000, departureTime: '10:00', arrivalTime: '12:00', duration: '2h', rating: 4.2 },
+      { airline: 'Bamboo Airways', price: 680000, departureTime: '14:00', arrivalTime: '16:00', duration: '2h', rating: 4.7 },
+    ];
+
+    const sortedByPrice = [...fallbackFlights].sort((a, b) => a.price - b.price);
+    const cheapest = sortedByPrice[0];
+    
+    const sortedByValue = [...fallbackFlights].sort((a, b) => (b.rating / b.price) - (a.rating / a.price));
+    const bestValue = sortedByValue[0];
+
+    return {
+      route: `${origin} → ${destination}`,
+      date: finalDate,
+      flights: fallbackFlights,
+      cheapest,
+      bestValue,
+    };
+  }
 };
 
 /**
  * Format price comparison for display
  */
-export const formatPriceComparison = (result: PriceComparisonResult): string => {
+export const formatPriceComparison = (result: PriceComparisonResult, origin?: string, destination?: string): string => {
   debug.log('PRICE_COMPARISON', 'Formatting comparison result', result);
 
   let output = `## 💰 So Sánh Giá Vé Máy Bay\n\n`;
@@ -120,14 +143,30 @@ export const formatPriceComparison = (result: PriceComparisonResult): string => 
   const cheapestPrice = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.cheapest.price);
   output += `**🎯 Rẻ Nhất:** ${result.cheapest.airline} - ${cheapestPrice}\n`;
   output += `- Cất cánh: ${result.cheapest.departureTime}, Hạ cánh: ${result.cheapest.arrivalTime}\n`;
-  output += `- Rating: ⭐ ${result.cheapest.rating}/5\n\n`;
+  output += `- Rating: ⭐ ${result.cheapest.rating}/5\n`;
+  if (origin && destination) {
+    const bookingLink = generateAirlineBookingLinks(result.cheapest.airline, origin, destination);
+    output += `- [Đặt vé](${bookingLink})\n\n`;
+  } else {
+    output += `\n`;
+  }
 
   const bestValuePrice = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.bestValue.price);
   output += `**✨ Tốt Nhất:** ${result.bestValue.airline} - ${bestValuePrice}\n`;
   output += `- Cất cánh: ${result.bestValue.departureTime}, Hạ cánh: ${result.bestValue.arrivalTime}\n`;
-  output += `- Rating: ⭐ ${result.bestValue.rating}/5 (giá tốt + chất lượng)\n\n`;
+  output += `- Rating: ⭐ ${result.bestValue.rating}/5 (giá tốt + chất lượng)\n`;
+  if (origin && destination) {
+    const bookingLink = generateAirlineBookingLinks(result.bestValue.airline, origin, destination);
+    output += `- [Đặt vé](${bookingLink})\n\n`;
+  } else {
+    output += `\n`;
+  }
 
   output += `---\n\n`;
+  if (origin && destination) {
+    const googleFlightsLink = generateGoogleFlightsLink(origin, destination, result.date);
+    output += `🔗 [Xem trên Google Flights](${googleFlightsLink})\n\n`;
+  }
   output += `💡 **Mẹo:** Đặt vé vào thứ Tư hoặc thứ Năm để có giá tốt nhất!\n`;
 
   return output;

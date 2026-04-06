@@ -220,12 +220,20 @@ export default function App() {
         const details = extractPriceComparisonDetails(userMessage);
         
         if (details.origin && details.destination) {
-          const result = comparePrices(details.origin, details.destination, details.date || 'sớm nhất');
-          const formattedComparison = formatPriceComparison(result);
-          setMessages(prev => [...prev, { role: 'model', text: formattedComparison }]);
-          setIsLoading(false);
-          debug.groupEnd();
-          return;
+          try {
+            const result = await comparePrices(details.origin, details.destination, details.date || 'sớm nhất');
+            const formattedComparison = formatPriceComparison(result, details.origin, details.destination);
+            setMessages(prev => [...prev, { role: 'model', text: formattedComparison }]);
+            setIsLoading(false);
+            debug.groupEnd();
+            return;
+          } catch (error) {
+            debug.error('APP', 'Price comparison error', error);
+            setMessages(prev => [...prev, { role: 'model', text: 'Xin lỗi, tôi gặp sự cố khi so sánh giá vé. Vui lòng thử lại hoặc cho tôi biết thêm chi tiết.' }]);
+            setIsLoading(false);
+            debug.groupEnd();
+            return;
+          }
         } else {
           setMessages(prev => [...prev, {
             role: 'model',
