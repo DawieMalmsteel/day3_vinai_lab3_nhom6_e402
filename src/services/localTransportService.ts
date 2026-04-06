@@ -37,6 +37,14 @@ const transportDatabase: Record<string, TransportOption[]> = {
 export const detectLocalTransportRequest = (message: string): boolean => {
   const lowerMsg = message.toLowerCase();
   const transportKeywords = ['di chuyển', 'từ', 'đến', 'mất bao lâu', 'taxi', 'grab', 'xe buýt', 'transport', 'bao xa', 'giao thông'];
+  const flightKeywords = ['chuyến bay', 'máy bay', 'flight', 'vé máy bay', 'vé chuyến bay', 'hãng hàng không'];
+  
+  // Don't match if it's about flights
+  const hasFlightKeyword = flightKeywords.some(kw => lowerMsg.includes(kw));
+  if (hasFlightKeyword) {
+    return false;
+  }
+  
   return transportKeywords.some(kw => lowerMsg.includes(kw));
 };
 

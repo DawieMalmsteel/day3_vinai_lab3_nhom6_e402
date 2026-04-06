@@ -26,6 +26,37 @@ const mockFlightDatabase: Record<string, FlightPrice[]> = {
     { airline: 'Vietjet', price: 300000, departureTime: '10:00', arrivalTime: '11:30', duration: '1h 30m', rating: 4.2 },
     { airline: 'Bamboo Airways', price: 480000, departureTime: '13:15', arrivalTime: '14:45', duration: '1h 30m', rating: 4.7 },
   ],
+  'danang-hanoi': [
+    { airline: 'Vietnam Airlines', price: 650000, departureTime: '08:00', arrivalTime: '09:30', duration: '1h 30m', rating: 4.8 },
+    { airline: 'Vietjet', price: 300000, departureTime: '11:45', arrivalTime: '13:15', duration: '1h 30m', rating: 4.2 },
+    { airline: 'Bamboo Airways', price: 480000, departureTime: '15:45', arrivalTime: '17:15', duration: '1h 30m', rating: 4.7 },
+  ],
+};
+
+/**
+ * Normalize city name to key format
+ */
+const normalizeCityName = (cityName: string): string => {
+  const normalized: Record<string, string> = {
+    'tp.hcm': 'tp.hcm',
+    'tpbcm': 'tp.hcm',
+    'sai gon': 'tp.hcm',
+    'saigon': 'tp.hcm',
+    'hồ chí minh': 'tp.hcm',
+    'ho chi minh': 'tp.hcm',
+    'hà nội': 'hanoi',
+    'ha noi': 'hanoi',
+    'hanoi': 'hanoi',
+    'đà nẵng': 'danang',
+    'da nang': 'danang',
+    'danang': 'danang',
+    'phú quốc': 'phuquoc',
+    'phu quoc': 'phuquoc',
+    'huế': 'hue',
+    'hue': 'hue',
+    'nha trang': 'nhatrang',
+  };
+  return normalized[cityName.toLowerCase().trim()] || cityName.toLowerCase().trim();
 };
 
 /**
@@ -139,9 +170,11 @@ export const getFlightPrices = async (
     return realPrices;
   }
 
-  // Fallback to mock data
+  // Fallback to mock data with normalized city names
   debug.warn('GOOGLE_FLIGHTS', 'Falling back to mock data');
-  const routeKey = `${origin}-${destination}`.toLowerCase();
+  const normalizedOrigin = normalizeCityName(origin);
+  const normalizedDest = normalizeCityName(destination);
+  const routeKey = `${normalizedOrigin}-${normalizedDest}`.toLowerCase();
   const mockPrices = mockFlightDatabase[routeKey] || [
     { airline: 'Vietnam Airlines', price: 850000, departureTime: '07:00', arrivalTime: '09:00', duration: '2h', rating: 4.8 },
     { airline: 'Vietjet', price: 480000, departureTime: '10:00', arrivalTime: '12:00', duration: '2h', rating: 4.2 },

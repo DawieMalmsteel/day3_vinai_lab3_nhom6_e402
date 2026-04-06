@@ -31,8 +31,19 @@ const flightDatabase: Record<string, FlightPrice[]> = {
  */
 export const detectPriceComparisonRequest = (message: string): boolean => {
   const lowerMsg = message.toLowerCase();
+  // Check for explicit price comparison keywords OR flight-related keywords with "từ...đến"
   const priceKeywords = ['so sánh giá', 'giá rẻ nhất', 'vé rẻ', 'hãng nào rẻ', 'hãng nào tốt', 'so sanh'];
-  return priceKeywords.some(kw => lowerMsg.includes(kw));
+  const flightKeywords = ['chuyến bay', 'máy bay', 'flight', 'vé máy bay', 'vé chuyến bay', 'hãng hàng không'];
+  
+  const hasPrice = priceKeywords.some(kw => lowerMsg.includes(kw));
+  const hasFlightKeyword = flightKeywords.some(kw => lowerMsg.includes(kw));
+  
+  // If it mentions flights explicitly, and has "từ...đến" pattern, it's a price comparison
+  if (hasFlightKeyword && (lowerMsg.includes('từ') || lowerMsg.includes('đến'))) {
+    return true;
+  }
+  
+  return hasPrice;
 };
 
 /**
@@ -45,14 +56,68 @@ export const extractPriceComparisonDetails = (message: string): {
 } => {
   const result: { origin?: string; destination?: string; date?: string } = {};
   
-  // Simple extraction - in real app would use more sophisticated parsing
-  const cities = ['tp.hcm', 'hà nội', 'đà nẵng', 'phú quốc', 'hue', 'nha trang'];
+  // City name mappings to normalize
+  const cityMappings: Record<string, string> = {
+    'tp.hcm': 'tp.hcm',
+    'tpbcm': 'tp.hcm',
+    'sai gon': 'tp.hcm',
+    'saigon': 'tp.hcm',
+    'hồ chí minh': 'tp.hcm',
+    'ho chi minh': 'tp.hcm',
+    'hà nội': 'hà nội',
+    'ha noi': 'hà nội',
+    'hanoi': 'hà nội',
+    'đà nẵng': 'đà nẵng',
+    'da nang': 'đà nẵng',
+    'danang': 'đà nẵng',
+    'phú quốc': 'phú quốc',
+    'phu quoc': 'phú quốc',
+    'huế': 'huế',
+    'hue': 'huế',
+    'nha trang': 'nha trang',
+  };
+  
   const lowerMsg = message.toLowerCase();
   
-  const foundCities = cities.filter(city => lowerMsg.includes(city));
-  if (foundCities.length >= 2) {
-    result.origin = foundCities[0];
-    result.destination = foundCities[1];
+  // First try to match "từ ... đến" pattern (match until end)
+  const fromToPattern = /từ\s+(.+?)\s+đến\s+(.+?)$/i;
+  const fromToMatch = message.match(fromToPattern);
+  
+  if (fromToMatch) {
+    const originStr = fromToMatch[1].trim().toLowerCase();
+    const destStr = fromToMatch[2].trim().toLowerCase();
+    
+    // Match cities (try longer matches first to handle multi-word cities)
+    const sortedKeys = Object.keys(cityMappings).sort((a, b) => b.length - a.length);
+    
+    for (const key of sortedKeys) {
+      if (!result.origin && originStr.includes(key)) {
+        result.origin = cityMappings[key];
+      }
+      if (!result.destination && destStr.includes(key)) {
+        result.destination = cityMappings[key];
+      }
+    }
+  }
+  
+  // Fallback: find all cities mentioned in message
+  if (!result.origin || !result.destination) {
+    const foundCities: string[] = [];
+    const sortedKeys = Object.keys(cityMappings).sort((a, b) => b.length - a.length);
+    
+    for (const key of sortedKeys) {
+      if (lowerMsg.includes(key)) {
+        const normalized = cityMappings[key];
+        if (!foundCities.includes(normalized)) {
+          foundCities.push(normalized);
+        }
+      }
+    }
+    
+    if (foundCities.length >= 2) {
+      result.origin = result.origin || foundCities[0];
+      result.destination = result.destination || foundCities[1];
+    }
   }
 
   // Extract date
