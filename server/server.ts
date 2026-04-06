@@ -55,52 +55,106 @@ function getCityCode(cityName: string): string {
 }
 
 /**
- * Mock flight database fallback
+ * Base prices for different routes (in VND)
+ * These are realistic Vietnamese domestic flight prices
  */
-const mockFlightDatabase: Record<string, FlightPrice[]> = {
-  'tp.hcm-hanoi': [
-    { airline: 'Vietnam Airlines', price: 850000, departureTime: '06:00', arrivalTime: '07:45', duration: '1h 45m', rating: 4.8 },
-    { airline: 'Vietjet', price: 450000, departureTime: '08:30', arrivalTime: '10:15', duration: '1h 45m', rating: 4.2 },
-    { airline: 'Bamboo Airways', price: 650000, departureTime: '14:00', arrivalTime: '15:45', duration: '1h 45m', rating: 4.7 },
-    { airline: 'AirAsia', price: 380000, departureTime: '22:00', arrivalTime: '23:45', duration: '1h 45m', rating: 3.9 },
-  ],
-  'tp.hcm-danang': [
-    { airline: 'Vietnam Airlines', price: 750000, departureTime: '07:00', arrivalTime: '08:30', duration: '1h 30m', rating: 4.8 },
-    { airline: 'Vietjet', price: 380000, departureTime: '09:45', arrivalTime: '11:15', duration: '1h 30m', rating: 4.2 },
-    { airline: 'Bamboo Airways', price: 550000, departureTime: '15:30', arrivalTime: '17:00', duration: '1h 30m', rating: 4.7 },
-    { airline: 'AirAsia', price: 320000, departureTime: '23:00', arrivalTime: '00:30+1', duration: '1h 30m', rating: 3.9 },
-  ],
-  'hanoi-danang': [
-    { airline: 'Vietnam Airlines', price: 650000, departureTime: '06:30', arrivalTime: '08:00', duration: '1h 30m', rating: 4.8 },
-    { airline: 'Vietjet', price: 300000, departureTime: '10:00', arrivalTime: '11:30', duration: '1h 30m', rating: 4.2 },
-    { airline: 'Bamboo Airways', price: 480000, departureTime: '13:15', arrivalTime: '14:45', duration: '1h 30m', rating: 4.7 },
-  ],
-  'danang-hanoi': [
-    { airline: 'Vietnam Airlines', price: 650000, departureTime: '08:00', arrivalTime: '09:30', duration: '1h 30m', rating: 4.8 },
-    { airline: 'Vietjet', price: 300000, departureTime: '11:45', arrivalTime: '13:15', duration: '1h 30m', rating: 4.2 },
-    { airline: 'Bamboo Airways', price: 480000, departureTime: '15:45', arrivalTime: '17:15', duration: '1h 30m', rating: 4.7 },
-  ],
-  'danang-dalat': [
-    { airline: 'Vietnam Airlines', price: 520000, departureTime: '07:30', arrivalTime: '08:45', duration: '1h 15m', rating: 4.8 },
-    { airline: 'Vietjet', price: 280000, departureTime: '10:15', arrivalTime: '11:30', duration: '1h 15m', rating: 4.2 },
-    { airline: 'Bamboo Airways', price: 420000, departureTime: '14:00', arrivalTime: '15:15', duration: '1h 15m', rating: 4.7 },
-  ],
-  'dalat-danang': [
-    { airline: 'Vietnam Airlines', price: 520000, departureTime: '09:00', arrivalTime: '10:15', duration: '1h 15m', rating: 4.8 },
-    { airline: 'Vietjet', price: 280000, departureTime: '12:30', arrivalTime: '13:45', duration: '1h 15m', rating: 4.2 },
-    { airline: 'Bamboo Airways', price: 420000, departureTime: '16:00', arrivalTime: '17:15', duration: '1h 15m', rating: 4.7 },
-  ],
-  'tp.hcm-dalat': [
-    { airline: 'Vietnam Airlines', price: 650000, departureTime: '08:00', arrivalTime: '09:30', duration: '1h 30m', rating: 4.8 },
-    { airline: 'Vietjet', price: 380000, departureTime: '11:00', arrivalTime: '12:30', duration: '1h 30m', rating: 4.2 },
-    { airline: 'Bamboo Airways', price: 520000, departureTime: '15:00', arrivalTime: '16:30', duration: '1h 30m', rating: 4.7 },
-  ],
-  'dalat-tp.hcm': [
-    { airline: 'Vietnam Airlines', price: 650000, departureTime: '10:00', arrivalTime: '11:30', duration: '1h 30m', rating: 4.8 },
-    { airline: 'Vietjet', price: 380000, departureTime: '13:15', arrivalTime: '14:45', duration: '1h 30m', rating: 4.2 },
-    { airline: 'Bamboo Airways', price: 520000, departureTime: '17:00', arrivalTime: '18:30', duration: '1h 30m', rating: 4.7 },
-  ],
+const basePriceMap: Record<string, number> = {
+  'sgn-han': 850000,
+  'han-sgn': 850000,
+  'sgn-dad': 750000,
+  'dad-sgn': 750000,
+  'han-dad': 650000,
+  'dad-han': 650000,
+  'sgn-dli': 650000,
+  'dli-sgn': 650000,
+  'han-dli': 450000,
+  'dli-han': 450000,
+  'dad-dli': 520000,
+  'dli-dad': 520000,
+  'sgn-pqc': 750000,
+  'pqc-sgn': 750000,
 };
+
+/**
+ * Generate realistic flight data based on date and route
+ * Prices vary by day of week, time of day, etc.
+ */
+function generateRealisticFlights(origin: string, destination: string, date: string): FlightPrice[] {
+  const routeKey = `${origin.toLowerCase()}-${destination.toLowerCase()}`;
+  const basePrice = basePriceMap[routeKey] || 600000;
+
+  // Parse date to check day of week (weekend = higher prices)
+  const dateObj = new Date(date + 'T00:00:00Z');
+  const dayOfWeek = dateObj.getDay(); // 0=Sun, 6=Sat
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  const isPeakDay = dayOfWeek === 5 || dayOfWeek === 6; // Friday/Saturday
+
+  // Price multiplier based on day
+  const dayMultiplier = isPeakDay ? 1.3 : isWeekend ? 1.15 : 1.0;
+
+  // Airlines with different price strategies
+  const airlines = [
+    {
+      name: 'Vietnam Airlines',
+      priceMultiplier: 1.0,
+      quality: 4.8,
+      times: [
+        { departure: '06:00', arrival: '07:45', duration: '1h 45m' },
+        { departure: '14:30', arrival: '16:15', duration: '1h 45m' },
+      ],
+    },
+    {
+      name: 'Vietjet',
+      priceMultiplier: 0.55,
+      quality: 4.2,
+      times: [
+        { departure: '08:30', arrival: '10:15', duration: '1h 45m' },
+        { departure: '19:00', arrival: '20:45', duration: '1h 45m' },
+      ],
+    },
+    {
+      name: 'Bamboo Airways',
+      priceMultiplier: 0.8,
+      quality: 4.7,
+      times: [
+        { departure: '11:00', arrival: '12:45', duration: '1h 45m' },
+        { departure: '16:30', arrival: '18:15', duration: '1h 45m' },
+      ],
+    },
+    {
+      name: 'AirAsia',
+      priceMultiplier: 0.45,
+      quality: 3.9,
+      times: [
+        { departure: '22:30', arrival: '00:15+1', duration: '1h 45m' },
+      ],
+    },
+  ];
+
+  // Generate flights with some variation
+  const flights: FlightPrice[] = [];
+  for (const airline of airlines) {
+    const timeOption = airline.times[Math.floor(Math.random() * airline.times.length)];
+    const finalPrice = Math.round(basePrice * airline.priceMultiplier * dayMultiplier);
+    
+    // Add some random variation (±5%)
+    const variance = finalPrice * 0.05 * (Math.random() - 0.5);
+    const price = Math.round(finalPrice + variance);
+
+    flights.push({
+      airline: airline.name,
+      price: Math.max(price, 200000), // Minimum realistic price
+      departureTime: timeOption.departure,
+      arrivalTime: timeOption.arrival,
+      duration: timeOption.duration,
+      rating: airline.quality,
+    });
+  }
+
+  // Sort by price
+  flights.sort((a, b) => a.price - b.price);
+  return flights;
+}
 
 /**
  * API endpoint: GET /api/flights/search
@@ -139,32 +193,14 @@ app.get('/api/flights/search', async (req, res) => {
       });
     }
 
-    // Fallback to mock data
-    console.log('[API] Scraping failed, falling back to mock data');
-    const routeKey = `${originStr}-${destStr}`.toLowerCase();
-    const mockFlights = mockFlightDatabase[routeKey];
+    // Fallback to intelligent mock data generator
+    console.log('[API] Scraping failed, generating intelligent mock data');
+    const mockFlights = generateRealisticFlights(originCode, destCode, dateStr);
 
-    if (mockFlights && mockFlights.length > 0) {
-      console.log(`[API] Returning ${mockFlights.length} mock flights`);
-      return res.json({
-        success: true,
-        source: 'mock_data',
-        flights: mockFlights,
-      });
-    }
-
-    // Generate generic fallback flights
-    console.log('[API] No mock data found, generating generic flights');
-    const genericFlights: FlightPrice[] = [
-      { airline: 'Vietnam Airlines', price: 850000, departureTime: '07:00', arrivalTime: '09:00', duration: '2h', rating: 4.8 },
-      { airline: 'Vietjet', price: 480000, departureTime: '10:00', arrivalTime: '12:00', duration: '2h', rating: 4.2 },
-      { airline: 'Bamboo Airways', price: 680000, departureTime: '14:00', arrivalTime: '16:00', duration: '2h', rating: 4.7 },
-    ];
-
-    res.json({
+    return res.json({
       success: true,
-      source: 'fallback',
-      flights: genericFlights,
+      source: 'mock_data',
+      flights: mockFlights,
     });
   } catch (error: any) {
     console.error('[API] Error during flight search:', error);
