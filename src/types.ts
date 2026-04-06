@@ -70,3 +70,92 @@ export interface HotelOption {
   rating: number;
   location: HotelLocation;
 }
+
+// Trip Planner types
+export interface ItineraryDay {
+  day: number;
+  date: string;
+  activities: string[];
+  meals: string[];
+  accommodation: string;
+  notes: string;
+}
+
+export interface TripPlan {
+  destination: string;
+  startDate: string;
+  endDate: string;
+  travelers: number;
+  itinerary: ItineraryDay[];
+  estimatedBudget: number;
+}
+
+// Price Comparison types
+export interface FlightPrice {
+  airline: string;
+  price: number;
+  departureTime: string;
+  arrivalTime: string;
+  duration: string;
+  rating: number;
+}
+
+export interface PriceComparisonResult {
+  route: string;
+  date: string;
+  flights: FlightPrice[];
+  cheapest: FlightPrice;
+  bestValue: FlightPrice;
+}
+
+// Restaurant Recommendation types
+export interface Restaurant {
+  id: string;
+  name: string;
+  city: string;
+  cuisine: string;
+  price: string;
+  rating: number;
+  address: string;
+  bookingUrl: string;
+}
+
+export interface RestaurantRecommendation {
+  city: string;
+  cuisineType: string;
+  restaurants: Restaurant[];
+}
+
+// Local Transport types
+export interface TransportOption {
+  type: 'taxi' | 'grab' | 'bus' | 'motorbike' | 'bicycle';
+  estimatedPrice: number;
+  estimatedTime: number;
+  description: string;
+}
+
+export interface LocalTransportGuide {
+  origin: string;
+  destination: string;
+  distanceKm: number;
+  options: TransportOption[];
+}
+
+// Activity Suggestion types
+export interface Activity {
+  id: string;
+  name: string;
+  city: string;
+  type: string;
+  price: number;
+  rating: number;
+  description: string;
+  duration: string;
+  bookingUrl: string;
+}
+
+export interface ActivitySuggestions {
+  city: string;
+  activities: Activity[];
+  totalActivities: number;
+}

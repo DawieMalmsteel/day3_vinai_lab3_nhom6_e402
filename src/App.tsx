@@ -7,7 +7,12 @@ import { chatWithTravelAgent, query_knowledge_base } from './services/gemini';
 import { debug } from './utils/debug';
 import { detectRoute, parseTransport, parsePassengerCount, searchBookingLinks, formatBookingOptions } from './services/bookingService';
 import { detectHotelSearch, searchHotels, formatHotelsOptionA, formatHotelsOptionB, formatHotelsOptionC } from './services/hotelService';
-import { isValidTopic, getOutOfScopeMessage } from './services/contentFilter';
+import { isValidTopic, getOutOfScopeMessage, detectTopicCategory } from './services/contentFilter';
+import { detectTripPlanRequest, parseTripDetails, generateItinerary, formatItinerary } from './services/tripPlannerService';
+import { detectPriceComparisonRequest, extractPriceComparisonDetails, comparePrices, formatPriceComparison } from './services/priceComparisonService';
+import { detectRestaurantRequest, extractRestaurantDetails, getRestaurantRecommendations, formatRestaurantRecommendations } from './services/restaurantService';
+import { detectLocalTransportRequest, extractTransportDetails, getTransportGuide, formatTransportGuide } from './services/localTransportService';
+import { detectActivityRequest, extractActivityCity, getActivitySuggestions, formatActivitySuggestions } from './services/activityService';
 import type { TravelBookingState, HotelSearchState } from './types';
 
 function cn(...inputs: ClassValue[]) {
@@ -175,6 +180,136 @@ export default function App() {
       }
 
       // Regular chat flow (non-booking)
+      
+      // ========== NEW USE CASES (5 features) ==========
+      
+      // 1. TRIP PLANNER - Lên kế hoạch chuyến đi
+      if (detectTripPlanRequest(userMessage)) {
+        debug.log('APP', 'Trip planner request detected');
+        
+        // Extract trip details (simplified - ask follow-up for full details)
+        const tripKeywords = ['đà nẵng', 'đà lạt', 'phú quốc', 'hà nội', 'hồ chí minh', 'huế', 'nha trang'];
+        const destination = tripKeywords.find(city => userMessage.toLowerCase().includes(city));
+        
+        if (destination) {
+          const details = parseTripDetails(userMessage, destination);
+          const itinerary = generateItinerary(
+            destination,
+            details.startDate || '2024-01-15',
+            details.endDate || '2024-01-18',
+            details.travelers || 1
+          );
+          const formattedPlan = formatItinerary(itinerary);
+          setMessages(prev => [...prev, { role: 'model', text: formattedPlan }]);
+          setIsLoading(false);
+          debug.groupEnd();
+          return;
+        } else {
+          setMessages(prev => [...prev, {
+            role: 'model',
+            text: 'Bạn muốn lên kế hoạch chuyến đi đến thành phố nào? (VD: Đà Nẵng, Đà Lạt, Phú Quốc, Hà Nội, Hồ Chí Minh...)'
+          }]);
+          setIsLoading(false);
+          debug.groupEnd();
+          return;
+        }
+      }
+
+      // 2. PRICE COMPARISON - So sánh giá vé
+      if (detectPriceComparisonRequest(userMessage)) {
+        debug.log('APP', 'Price comparison request detected');
+        const details = extractPriceComparisonDetails(userMessage);
+        
+        if (details.origin && details.destination) {
+          const result = comparePrices(details.origin, details.destination, details.date || 'sớm nhất');
+          const formattedComparison = formatPriceComparison(result);
+          setMessages(prev => [...prev, { role: 'model', text: formattedComparison }]);
+          setIsLoading(false);
+          debug.groupEnd();
+          return;
+        } else {
+          setMessages(prev => [...prev, {
+            role: 'model',
+            text: 'Hãy cho tôi biết bạn muốn so sánh giá vé từ thành phố nào đến thành phố nào? (VD: TP.HCM đến Hà Nội, Đà Nẵng đến Phú Quốc...)'
+          }]);
+          setIsLoading(false);
+          debug.groupEnd();
+          return;
+        }
+      }
+
+      // 3. RESTAURANT RECOMMENDATIONS - Gợi ý nhà hàng
+      if (detectRestaurantRequest(userMessage)) {
+        debug.log('APP', 'Restaurant recommendation request detected');
+        const details = extractRestaurantDetails(userMessage);
+        
+        if (details.city) {
+          const recommendations = getRestaurantRecommendations(details.city, details.cuisineType || 'việt nam');
+          const formatted = formatRestaurantRecommendations(recommendations);
+          setMessages(prev => [...prev, { role: 'model', text: formatted }]);
+          setIsLoading(false);
+          debug.groupEnd();
+          return;
+        } else {
+          setMessages(prev => [...prev, {
+            role: 'model',
+            text: 'Bạn muốn tìm nhà hàng ở thành phố nào? (VD: Đà Nẵng, Đà Lạt, Phú Quốc, Hà Nội...)\nBạn có thể chỉ định loại ẩm thực: hải sản, Việt Nam, quốc tế, cà phê...'
+          }]);
+          setIsLoading(false);
+          debug.groupEnd();
+          return;
+        }
+      }
+
+      // 4. LOCAL TRANSPORT GUIDE - Hướng dẫn di chuyển
+      if (detectLocalTransportRequest(userMessage)) {
+        debug.log('APP', 'Local transport request detected');
+        const details = extractTransportDetails(userMessage);
+        
+        if (details.destination) {
+          const origin = details.origin || 'Khách sạn/Trung tâm';
+          const guide = getTransportGuide(origin, details.destination);
+          const formatted = formatTransportGuide(guide);
+          setMessages(prev => [...prev, { role: 'model', text: formatted }]);
+          setIsLoading(false);
+          debug.groupEnd();
+          return;
+        } else {
+          setMessages(prev => [...prev, {
+            role: 'model',
+            text: 'Bạn muốn đi từ đâu đến đâu? (VD: từ khách sạn đến bãi biển, từ sân bay đến trung tâm...)'
+          }]);
+          setIsLoading(false);
+          debug.groupEnd();
+          return;
+        }
+      }
+
+      // 5. ACTIVITY SUGGESTIONS - Gợi ý hoạt động
+      if (detectActivityRequest(userMessage)) {
+        debug.log('APP', 'Activity suggestion request detected');
+        const city = extractActivityCity(userMessage);
+        
+        if (city) {
+          const suggestions = getActivitySuggestions(city);
+          const formatted = formatActivitySuggestions(suggestions);
+          setMessages(prev => [...prev, { role: 'model', text: formatted }]);
+          setIsLoading(false);
+          debug.groupEnd();
+          return;
+        } else {
+          setMessages(prev => [...prev, {
+            role: 'model',
+            text: 'Bạn muốn biết hoạt động có gì vui ở thành phố nào? (VD: Đà Nẵng, Đà Lạt, Phú Quốc, Hà Nội...)'
+          }]);
+          setIsLoading(false);
+          debug.groupEnd();
+          return;
+        }
+      }
+
+      // ========== END NEW USE CASES ==========
+
       // Detect route for booking
       const route = detectRoute(userMessage);
       if (route.isValid) {
