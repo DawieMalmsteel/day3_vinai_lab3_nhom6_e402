@@ -1,20 +1,26 @@
-# AGENTS.md — AI Travel Agent
+# AGENTS.md — AI Travel Agent Chatbot
 
-## Project Overview
+**Single-page React 19 + TypeScript chatbot for travel planning via Gemini 2.0 Flash API.**
 
-React 19 + TypeScript 5.8 + Vite frontend chatbot for travel planning. AI-powered using Google Gemini API (`@google/genai`). Tailwind CSS v4 for styling. Scoped to: flights, buses, hotels, and travel guides only.
+## Quick Start
 
-## Build & Commands
+```bash
+npm install                    # Install deps (Vite will auto-load from package.json)
+npm run dev                    # Dev server at http://0.0.0.0:3000 with HMR
+npm run lint                   # TypeScript check (only verification available)
+npm run build                  # Production bundle to dist/
+```
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Dev server on `http://0.0.0.0:3000` with HMR |
-| `npm run build` | Production build to `dist/` (Vite) |
-| `npm run preview` | Preview production build locally |
-| `npm run clean` | Remove `dist/` directory |
-| `npm run lint` | TypeScript type-check only (`tsc --noEmit`) |
+**Critical:** Set `GEMINI_API_KEY` env var before dev or build. Required at runtime.
 
-**No test runner or linter configured.** TypeScript strict mode is the quality gate. Manual testing required.
+## Common Gotchas
+
+- **No test runner configured.** TypeScript strict mode is the quality gate. Changes must pass `npm run lint`.
+- **Gemini API rate limits:** Free tier quota exhausts quickly. Use exponential backoff (see `gemini.ts` retry logic).
+- **System prompt is critical.** Changes to `systemInstruction` in `gemini.ts:103-160` directly affect all model responses. Always include warm greeting section, scope limits, and response rules.
+- **Dev server must use `--host=0.0.0.0`** for HMR to work correctly (hardcoded in `vite.config.ts`).
+- **CORS proxy:** External web fetches use `api.allorigins.win` to bypass CORS. Travel guides served locally from `/public/data/guides/*.md`.
+- **Single component state:** All chat state lives in `App.tsx`. Booking/hotel flows are multistep within the same component (no routing).
 
 ## Architecture
 
@@ -65,10 +71,10 @@ public/
 
 ### Error Handling
 - **Try/catch**: Wrap all async external calls (fetch, API, file I/O)
-- **Logging**: Use `debug.error()` or `console.error()` with context
+- **Logging**: Use `debug.log()`, `debug.success()`, `debug.error()` with context
 - **User messages**: Return friendly Vietnamese strings, never raw stack traces
 - **Retries**: Exponential backoff for 429 (rate limit) & 5xx errors (max 3 retries)
-- Example: Check `gemini.ts` for retry logic pattern
+- Example: Check `gemini.ts:136-150` for retry logic pattern
 
 ### React Patterns
 - **Components**: Functional only (no class components)
@@ -85,32 +91,56 @@ public/
 
 ## Key Implementation Details
 
-### Topic Validation
-All messages checked via `isValidTopic()` in `contentFilter.ts` before processing:
+### System Prompt Structure (gemini.ts:104-160)
+The system prompt is **critical** for correct behavior. It has 8 sections (do not skip or merge):
+1. **Greeting section** - Warm greeting, ask needs, DO NOT dump scope list immediately
+2. **Scope (4 topics)** - ✈️ Flights, 🚌 Buses, 🏨 Hotels, 📍 Travel guides
+3. **Out-of-scope rejection** - Polite redirect (NOT curt), suggest travel alternatives
+4. **Response rules** - 5 rules: concise, markdown links, structure, follow-up questions, avoid verbosity
+5. **Booking resources** - 4 URL templates (Booking.com, Agoda, Vietjet, Vietnam Airlines)
+6. **Language & format** - Vietnamese only, Markdown, emojis, no HTML
+7. **Examples** - 3 detailed examples (greeting, in-scope, out-of-scope)
+8. **Things to avoid** - What NOT to do
+
+See `BEFORE_AFTER_COMPARISON.md` for tone improvements made in latest commit.
+
+### Topic Validation (contentFilter.ts)
+All messages checked via `isValidTopic()` before processing:
 - **Allowed**: flights, buses, hotels, travel guides (Đà Nẵng, Đà Lạt, Phú Quốc)
 - **Blocked**: restaurants, weather, sports, movies, work, relationships, etc.
-- **Response**: `getOutOfScopeMessage()` redirects to allowed topics
+- **Response**: `getOutOfScopeMessage()` returns polite, helpful rejection (see system prompt)
 
-### Booking Flow
-1. `detectRoute()` finds "từ X đến Y" patterns
-2. User selects transport (flight/bus)
-3. User enters passenger count
-4. `searchBookingLinks()` generates booking URLs via Gemini
-5. Results displayed in markdown format: `[Provider](URL)`
+### Booking Flow (App.tsx:65-119)
+Multi-step conversational flow in `App.tsx`:
+1. `detectRoute()` finds "từ X đến Y" patterns in user message
+2. Bot asks: "Flight or bus?"
+3. User selects transport method via `parseTransport()`
+4. Bot asks: "How many passengers?"
+5. `parsePassengerCount()` extracts number
+6. `searchBookingLinks()` calls Gemini to generate markdown links
+7. Results displayed as: `[Provider](URL)`
 
-### Hotel Search (3 Options)
-- **A) Quick**: 2-3 hotels with links
+**State managed in App.tsx** - no separate routing or state management library.
+
+### Hotel Search (hotelService.ts)
+3 search options (user picks A/B/C):
+- **A) Quick**: 2-3 top hotels with links
 - **B) Smart**: Ask location → filter → suggest
-- **C) Detailed**: Full search form with price/location/type filters
+- **C) Detailed**: Full search form with price/location/type
 
-### Debug Logging
-Use `debug.log()`, `debug.success()`, `debug.error()` with color-coded output:
+Hotel data is mock/simulated; returns formatted results based on selected type.
+
+### Debug Logging (debug.ts)
+Use color-coded logging with structure:
 ```typescript
 debug.group('Operation name');
-debug.log('MODULE', 'Message', data);
-debug.success('MODULE', 'Success message');
+debug.log('MODULE', 'Message', data);      // Info
+debug.success('MODULE', 'Success message'); // Success
+debug.error('MODULE', 'Error message', err); // Error
+debug.warn('MODULE', 'Warning message');    // Warning
 debug.groupEnd();
 ```
+**DO NOT mix debug.log() with console.log()** - use debug module for consistency.
 
 ## TypeScript Config
 - **Target**: ES2022
