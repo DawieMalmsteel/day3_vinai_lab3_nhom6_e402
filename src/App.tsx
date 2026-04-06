@@ -3,8 +3,12 @@ import { Send, Plane, Hotel, MapPin, Compass, Loader2, User, Bot, Sparkles, Chev
 import Markdown from 'react-markdown';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { chatWithTravelAgent, handleToolCalls } from './services/gemini';
+import { chatWithTravelAgent, query_knowledge_base } from './services/gemini';
 import { debug } from './utils/debug';
+import { detectRoute, parseTransport, parsePassengerCount, searchBookingLinks, formatBookingOptions } from './services/bookingService';
+import { detectHotelSearch, searchHotels, formatHotelsOptionA, formatHotelsOptionB, formatHotelsOptionC } from './services/hotelService';
+import { isValidTopic, getOutOfScopeMessage } from './services/contentFilter';
+import type { TravelBookingState, HotelSearchState } from './types';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -23,6 +27,8 @@ export default function App() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [bookingState, setBookingState] = useState<TravelBookingState>({ step: 'idle' });
+  const [hotelState, setHotelState] = useState<HotelSearchState>({ step: 'idle', searchType: null });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -41,69 +47,193 @@ export default function App() {
     setMessages(prev => [...prev, { role: 'user', text: userMessage }]);
     setIsLoading(true);
 
-    debug.group(`Chat Cycle: ${userMessage.substring(0, 50)}...`);
+    debug.group(`Chat: ${userMessage.substring(0, 50)}...`);
     debug.log('APP', 'User message received', userMessage);
 
     try {
+      // CHECK TOPIC VALIDITY - MUST BE ABOUT FLIGHTS, BUSES, HOTELS, OR TRAVEL GUIDES
+      if (!isValidTopic(userMessage)) {
+        debug.log('APP', 'Message is out of scope');
+        const outOfScopeMsg = getOutOfScopeMessage();
+        setMessages(prev => [...prev, { role: 'model', text: outOfScopeMsg }]);
+        setIsLoading(false);
+        debug.groupEnd();
+        return;
+      }
+
+      // Check if we're in a booking flow
+      if (bookingState.step === 'route_detected') {
+        // Ask for transport method
+        debug.log('APP', 'Booking flow: asking for transport method');
+        const transport = parseTransport(userMessage);
+        if (transport) {
+          setBookingState(prev => ({ ...prev, transportMethod: transport, step: 'asking_passengers' }));
+          setMessages(prev => [...prev, { 
+            role: 'model', 
+            text: `Bạn chọn ${transport === 'flight' ? 'chuyến bay' : 'xe buýt'}. Bây giờ, bạn muốn đặt vé cho mấy người?` 
+          }]);
+          setIsLoading(false);
+          debug.groupEnd();
+          return;
+        }
+      } else if (bookingState.step === 'asking_passengers') {
+        // Ask for passenger count
+        debug.log('APP', 'Booking flow: asking for passenger count');
+        const passengerCount = parsePassengerCount(userMessage);
+        if (passengerCount) {
+          setBookingState(prev => ({ ...prev, passengerCount, step: 'searching' }));
+          setMessages(prev => [...prev, { 
+            role: 'model', 
+            text: '*Đang tìm chuyến đi cho ' + passengerCount + ' hành khách...*',
+            isPlanning: true 
+          }]);
+
+          // Search for booking links
+          try {
+            const results = await searchBookingLinks(
+              bookingState.originCity!,
+              bookingState.destinationCity!,
+              bookingState.transportMethod!,
+              passengerCount
+            );
+
+            setMessages(prev => prev.filter(m => !m.isPlanning));
+            const formattedResults = formatBookingOptions(results);
+            setMessages(prev => [...prev, { 
+              role: 'model', 
+              text: formattedResults
+            }]);
+            setBookingState({ step: 'idle' });
+          } catch (error) {
+            debug.error('APP', 'Booking search error', error);
+            setMessages(prev => prev.filter(m => !m.isPlanning));
+            setMessages(prev => [...prev, { 
+              role: 'model', 
+              text: 'Xin lỗi, tôi gặp sự cố khi tìm chuyến đi. Vui lòng thử lại hoặc cho tôi biết thêm chi tiết.' 
+            }]);
+            setBookingState({ step: 'idle' });
+          }
+          setIsLoading(false);
+          debug.groupEnd();
+          return;
+        }
+      }
+
+      // Check if we're in hotel search flow
+      if (hotelState.step === 'asking_type') {
+        // User choosing between quick/smart/detailed
+        const userLower = userMessage.toLowerCase();
+        let selectedType: 'quick' | 'smart' | 'detailed' | null = null;
+        
+        if (userLower.includes('nhanh') || userLower.includes('quick') || userLower.includes('a')) {
+          selectedType = 'quick';
+        } else if (userLower.includes('thông minh') || userLower.includes('smart') || userLower.includes('b')) {
+          selectedType = 'smart';
+        } else if (userLower.includes('chi tiết') || userLower.includes('detailed') || userLower.includes('c')) {
+          selectedType = 'detailed';
+        }
+
+        if (selectedType && hotelState.city) {
+          debug.log('APP', `Hotel search: selected type ${selectedType}`);
+          setHotelState(prev => ({ ...prev, searchType: selectedType, step: 'searching' }));
+
+          const hotels = searchHotels(hotelState.city);
+          let formattedResult = '';
+          
+          if (selectedType === 'quick') {
+            formattedResult = formatHotelsOptionA(hotels);
+          } else if (selectedType === 'smart') {
+            formattedResult = formatHotelsOptionB(hotels);
+          } else {
+            formattedResult = formatHotelsOptionC(hotels);
+          }
+
+          setMessages(prev => [...prev, { role: 'model', text: formattedResult }]);
+          setHotelState({ step: 'idle', searchType: null });
+          setIsLoading(false);
+          debug.groupEnd();
+          return;
+        }
+      }
+
+      // Detect hotel search
+      const hotelCity = detectHotelSearch(userMessage);
+      if (hotelCity && hotelCity !== 'general') {
+        debug.log('APP', `Hotel search detected for: ${hotelCity}`);
+        setHotelState({
+          step: 'asking_type',
+          city: hotelCity,
+          searchType: null,
+        });
+        setMessages(prev => [...prev, {
+          role: 'model',
+          text: `Bạn muốn tìm khách sạn ở ${hotelCity}. Chọn cách tìm kiếm:\n\nA) ⚡ **Nhanh** - 2-3 khách sạn tốt nhất\nB) 🧠 **Thông minh** - Hỏi sở thích rồi gợi ý\nC) 📋 **Chi tiết** - Tìm kiếm đầy đủ theo yêu cầu`
+        }]);
+        setIsLoading(false);
+        debug.groupEnd();
+        return;
+      }
+
+      // Regular chat flow (non-booking)
+      // Detect route for booking
+      const route = detectRoute(userMessage);
+      if (route.isValid) {
+        debug.log('APP', `Route detected: ${route.from} → ${route.to}`);
+        setBookingState({
+          step: 'asking_transport',
+          originCity: route.from!,
+          destinationCity: route.to!
+        });
+        setMessages(prev => [...prev, { 
+          role: 'model', 
+          text: `Tôi thấy bạn muốn từ ${route.from} đến ${route.to}. Bạn muốn đi bằng **chuyến bay** hay **xe buýt**?` 
+        }]);
+        setIsLoading(false);
+        debug.groupEnd();
+        return;
+      }
+
+      // Detect location keywords
+      const locations = ['da lat', 'đà lạt', 'da nang', 'đà nẵng', 'phu quoc', 'phú quốc'];
+      const userMessageLower = userMessage.toLowerCase();
+      const detectedLocation = locations.find(loc => userMessageLower.includes(loc));
+
+      let enhancedMessage = userMessage;
+      if (detectedLocation) {
+        debug.log('APP', `Location detected: ${detectedLocation}`);
+        setMessages(prev => [...prev, { 
+          role: 'model', 
+          text: `*Đang tải thông tin về ${detectedLocation}...*`,
+          isPlanning: true 
+        }]);
+
+        try {
+          const kbContent = await query_knowledge_base(detectedLocation, userMessage);
+          enhancedMessage = `${userMessage}\n\n[Thông tin từ cẩm nang du lịch]\n${kbContent}`;
+          debug.success('APP', `KB content loaded (${kbContent.length} chars)`);
+        } catch (error) {
+          debug.error('APP', 'Failed to load KB content', error);
+        }
+
+        setMessages(prev => prev.filter(m => !m.isPlanning));
+      }
+
       // Convert messages to Gemini format
       let chatHistory = messages.map(m => ({
         role: m.role,
         parts: [{ text: m.text }]
       }));
-      chatHistory.push({ role: 'user', parts: [{ text: userMessage }] });
+      chatHistory.push({ role: 'user', parts: [{ text: enhancedMessage }] });
 
-      debug.log('APP', `Chat history prepared`, { messageCount: chatHistory.length });
+      debug.log('APP', `Calling model with ${chatHistory.length} messages`);
 
-      let response = await chatWithTravelAgent(chatHistory);
-      debug.log('APP', 'Initial response received from model');
-      
-      // Handle potential tool calls (ReAct loop) - Smart Hybrid Mode
-      let toolResults = await handleToolCalls(response);
-      let cycleCount = 0;
-      let usedTools = false;
-      
-      while (toolResults) {
-        usedTools = true;
-        cycleCount++;
-        debug.log('APP', `ReAct cycle ${cycleCount}: Tool calls detected`, {
-          toolCount: toolResults.length,
-          tools: toolResults.map(r => r.functionResponse.name),
-        });
-
-        // Show what the agent is doing in the UI
-        const toolNames = toolResults.map(r => r.functionResponse.name).join(', ');
-        setMessages(prev => [...prev, { 
-          role: 'model', 
-          text: `*Đang truy xuất thông tin từ cẩm nang (${toolNames})...*`,
-          isPlanning: true 
-        }]);
-
-        // Add tool results to history
-        chatHistory.push(response.candidates![0].content as any);
-        chatHistory.push({
-          role: 'user',
-          parts: toolResults as any
-        });
-
-        debug.log('APP', `Calling model again with tool results (cycle ${cycleCount})`);
-
-        // Call model again with tool results
-        response = await chatWithTravelAgent(chatHistory);
-        toolResults = await handleToolCalls(response);
-        
-        // Remove the "planning" message before adding the final response or next planning step
-        setMessages(prev => prev.filter(m => !m.isPlanning));
-      }
-
-      if (usedTools) {
-        debug.success('APP', `ReAct loop completed after ${cycleCount} cycle(s)`);
-      } else {
-        debug.warn('APP', 'Model did not call any tools - using direct response (Hybrid Fallback Mode)');
-      }
-
+      // Single API call - no tools, no ReAct loop
+      const response = await chatWithTravelAgent(chatHistory);
       const modelText = response.text || "Xin lỗi, tôi gặp sự cố khi xử lý yêu cầu của bạn.";
-      
-      // Extract grounding sources
+
+      debug.success('APP', `Response received (${modelText.length} chars)`);
+
+      // Extract grounding sources if available
       const sources: { uri: string; title: string }[] = [];
       const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
       if (groundingChunks) {
@@ -113,20 +243,21 @@ export default function App() {
             sources.push({ uri: chunk.web.uri, title: chunk.web.title });
           }
         });
-        debug.success('APP', `Extracted ${sources.length} reference sources`);
       }
 
       setMessages(prev => [...prev, { role: 'model', text: modelText, sources }]);
-      debug.success('APP', 'Final response added to chat');
+      debug.success('APP', 'Response added to chat');
     } catch (error: any) {
       debug.error('APP', 'Chat error occurred', error);
       console.error("Chat error:", error);
       let errorMessage = "Đã có lỗi xảy ra. Vui lòng thử lại sau.";
       
-      if (error?.message?.includes("429") || error?.status === "RESOURCE_EXHAUSTED") {
-        errorMessage = "Hệ thống đang quá tải (vượt quá hạn mức). Vui lòng đợi 1-2 phút rồi thử lại.";
-      } else if (error?.message?.includes("500") || error?.message?.includes("xhr error")) {
-        errorMessage = "Lỗi kết nối máy chủ. Vui lòng kiểm tra mạng và thử lại.";
+      if (error?.message?.includes("400")) {
+        errorMessage = "Lỗi yêu cầu. Vui lòng kiểm tra API key và thử lại.";
+      } else if (error?.message?.includes("429")) {
+        errorMessage = "Hệ thống đang quá tải. Vui lòng đợi 1-2 phút rồi thử lại.";
+      } else if (error?.message?.includes("500")) {
+        errorMessage = "Lỗi máy chủ. Vui lòng thử lại sau.";
       }
 
       setMessages(prev => [...prev, { role: 'model', text: errorMessage }]);
@@ -250,23 +381,58 @@ export default function App() {
             </button>
           </div>
           
-          {/* Quick Suggestions */}
+          {/* Quick Suggestions - Dynamic based on booking state */}
           <div className="flex flex-wrap gap-2 mt-4">
-            {[
-              "Gợi ý địa điểm ở Đà Lạt",
-              "Kế hoạch Đà Nẵng 3 ngày 10tr",
-              "Tìm khách sạn tại Phú Quốc",
-              "Lịch trình trekking Sapa"
-            ].map((suggestion, i) => (
-              <button
-                key={i}
-                onClick={() => setInput(suggestion)}
-                className="text-xs font-medium text-slate-500 bg-slate-50 hover:bg-white hover:text-blue-600 border border-slate-200 px-3 py-1.5 rounded-full transition-all flex items-center gap-1 group"
-              >
-                {suggestion}
-                <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-            ))}
+            {bookingState.step === 'asking_transport' && (
+              <>
+                <button
+                  onClick={() => setInput('Chuyến bay')}
+                  className="text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-4 py-2 rounded-full transition-all flex items-center gap-2"
+                >
+                  <Plane className="w-4 h-4" />
+                  Chuyến bay
+                </button>
+                <button
+                  onClick={() => setInput('Xe buýt')}
+                  className="text-xs font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-4 py-2 rounded-full transition-all flex items-center gap-2"
+                >
+                  🚌
+                  Xe buýt
+                </button>
+              </>
+            )}
+            {bookingState.step === 'asking_passengers' && (
+              <>
+                {[1, 2, 3, 4, 5].map(num => (
+                  <button
+                    key={num}
+                    onClick={() => setInput(num.toString())}
+                    className="text-xs font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-full transition-all"
+                  >
+                    {num} {num === 1 ? 'người' : 'người'}
+                  </button>
+                ))}
+              </>
+            )}
+            {bookingState.step === 'idle' && (
+              <>
+                {[
+                  "Gợi ý địa điểm ở Đà Lạt",
+                  "Kế hoạch Đà Nẵng 3 ngày 10tr",
+                  "Tìm khách sạn tại Phú Quốc",
+                  "Lịch trình trekking Sapa"
+                ].map((suggestion, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setInput(suggestion)}
+                    className="text-xs font-medium text-slate-500 bg-slate-50 hover:bg-white hover:text-blue-600 border border-slate-200 px-3 py-1.5 rounded-full transition-all flex items-center gap-1 group"
+                  >
+                    {suggestion}
+                    <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         </div>
       </footer>
