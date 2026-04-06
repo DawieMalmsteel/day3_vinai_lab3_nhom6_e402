@@ -116,7 +116,15 @@ const fetchWebContentDeclaration: FunctionDeclaration = {
 };
 
 // Gemini Service
-const getAI = () => new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const SHOPAIKEY_BASE_URL = 'https://api.shopaikey.com';
+
+const getAI = () =>
+    new GoogleGenAI({
+        apiKey: process.env.SHOPAIKEY_API_KEY || process.env.GEMINI_API_KEY || '',
+        httpOptions: {
+            baseUrl: SHOPAIKEY_BASE_URL,
+        },
+    });
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -142,7 +150,7 @@ const validateResponse = (response: GenerateContentResponse) => {
 };
 
 export const chatWithTravelAgent = async (messages: { role: string; parts: { text: string }[] }[], retryCount = 0): Promise<GenerateContentResponse> => {
-    const model = "gemini-2.5-pro";
+    const model = "gemini-2.5-flash";
     const MAX_RETRIES = 3;
 
     debug.log('GEMINI', `Calling model: ${model}`, {
@@ -154,7 +162,7 @@ export const chatWithTravelAgent = async (messages: { role: string; parts: { tex
     try {
         const ai = getAI();
         const response = await ai.models.generateContent({
-            model,
+            model : model,
             contents: messages,
             config: {
                 systemInstruction: `Bạn là một Chuyên gia Tư vấn Du lịch chuyên nghiệp và thông thái. 
