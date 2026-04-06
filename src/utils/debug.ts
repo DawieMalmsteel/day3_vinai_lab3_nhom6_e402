@@ -79,7 +79,7 @@ export const debug = {
 };
 
 /**
- * Debug helper to inspect Gemini response structure
+ * Debug helper to inspect AI Agent response structure
  * Useful for understanding why model may or may not call tools
  */
 export const debugResponse = (response: any) => {
