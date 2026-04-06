@@ -1,5 +1,5 @@
 - Nguyễn Anh Quân vẽ workflow filter cho user và tối ưu system prompt
-- Trần Sơn làm về search hotel system prompt
+- Trần Sơn làm về search hotel system prompt (code ở branch TranThuongTruongSon)
 - Phạm Đăng Phong debug log AI
 - Đào Hồng Sơn thêm provider Gemini bên thứ 3, thêm logs, so sánh chi phí khi dùng aganet và chatbot
 - Phạm Minh Khang thêm provider Openrouter cho app, thêm brave search cho app

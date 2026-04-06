@@ -2,6 +2,7 @@
 
 - **Student Name**: [Trần Thượng Trường Sơn]
 - **Student ID**: [2A202600313]
+- **Branch**: Phần làm của em là ở branch `TranThuongTruongSon`.
 
 ---
 
