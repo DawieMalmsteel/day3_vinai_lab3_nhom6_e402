@@ -9,6 +9,7 @@ import { detectRoute, parseTransport, parsePassengerCount, searchBookingLinks, f
 import { detectHotelSearch, searchHotels, formatHotelsOptionA, formatHotelsOptionB, formatHotelsOptionC } from './services/hotelService';
 
 import { detectTripPlanRequest, parseTripDetails, generateItinerary, formatItinerary } from './services/tripPlannerService';
+import { getCurrentDateFormatted, getDateAfterDays } from './utils/dateUtils';
 import { detectPriceComparisonRequest, extractPriceComparisonDetails, comparePrices, formatPriceComparison } from './services/priceComparisonService';
 import { detectRestaurantRequest, extractRestaurantDetails, getRestaurantRecommendations, formatRestaurantRecommendations } from './services/restaurantService';
 import { detectLocalTransportRequest, extractTransportDetails, getTransportGuide, formatTransportGuide } from './services/localTransportService';
@@ -185,11 +186,17 @@ export default function App() {
         
         if (destination) {
           const details = parseTripDetails(userMessage, destination);
+          const currentDate = getCurrentDateFormatted();
+          const duration = details.duration || 3;
+          const startDate = details.startDate || currentDate;
+          const endDate = details.endDate || getDateAfterDays(duration - 1);
+          
           const itinerary = generateItinerary(
             destination,
-            details.startDate || '2024-01-15',
-            details.endDate || '2024-01-18',
-            details.travelers || 1
+            startDate,
+            endDate,
+            details.travelers || 1,
+            duration
           );
           const formattedPlan = formatItinerary(itinerary);
           setMessages(prev => [...prev, { role: 'model', text: formattedPlan }]);

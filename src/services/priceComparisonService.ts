@@ -1,4 +1,5 @@
 import { debug } from '../utils/debug';
+import { getCurrentDateFormatted } from '../utils/dateUtils';
 import type { PriceComparisonResult, FlightPrice } from '../types';
 
 /**
@@ -66,8 +67,9 @@ export const extractPriceComparisonDetails = (message: string): {
 /**
  * Compare flight prices
  */
-export const comparePrices = (origin: string, destination: string, date: string): PriceComparisonResult => {
-  debug.log('PRICE_COMPARISON', `Comparing prices for ${origin} → ${destination}`, date);
+export const comparePrices = (origin: string, destination: string, date?: string): PriceComparisonResult => {
+  const finalDate = date || getCurrentDateFormatted();
+  debug.log('PRICE_COMPARISON', `Comparing prices for ${origin} → ${destination}`, finalDate);
 
   const routeKey = `${origin}-${destination}`.toLowerCase();
   const flights = flightDatabase[routeKey] || [
@@ -85,7 +87,7 @@ export const comparePrices = (origin: string, destination: string, date: string)
 
   return {
     route: `${origin} → ${destination}`,
-    date,
+    date: finalDate,
     flights,
     cheapest,
     bestValue,

@@ -1,4 +1,5 @@
 import { debug } from '../utils/debug';
+import { getCurrentDateFormatted, getDateAfterDays, parseDurationFromMessage, parseStartDateFromMessage, calculateEndDate } from '../utils/dateUtils';
 import type { TripPlan, ItineraryDay } from '../types';
 
 /**
@@ -17,15 +18,23 @@ export const parseTripDetails = (message: string, destination: string): {
   startDate?: string;
   endDate?: string;
   travelers?: number;
+  duration?: number;
 } => {
-  const result: { startDate?: string; endDate?: string; travelers?: number } = {};
+  const result: { startDate?: string; endDate?: string; travelers?: number; duration?: number } = {};
   
-  // Extract dates (simplified pattern)
-  const datePattern = /(\d{1,2}[\/\-]\d{1,2})|(\d{4}-\d{2}-\d{2})/g;
-  const dates = message.match(datePattern);
-  if (dates && dates.length >= 2) {
-    result.startDate = dates[0];
-    result.endDate = dates[1];
+  // Extract start date from message
+  const parsedDate = parseStartDateFromMessage(message);
+  if (parsedDate) {
+    result.startDate = parsedDate;
+  }
+
+  // Extract duration (number of days)
+  const duration = parseDurationFromMessage(message);
+  result.duration = duration;
+
+  // If we have start date, calculate end date
+  if (result.startDate) {
+    result.endDate = calculateEndDate(result.startDate, duration);
   }
 
   // Extract number of travelers
@@ -45,16 +54,34 @@ export const generateItinerary = (
   destination: string,
   startDate: string,
   endDate: string,
-  travelers: number = 1
+  travelers: number = 1,
+  duration: number = 3
 ): TripPlan => {
-  debug.log('TRIP_PLANNER', `Generating itinerary for ${destination}`, { startDate, endDate, travelers });
+  debug.log('TRIP_PLANNER', `Generating itinerary for ${destination}`, { startDate, endDate, travelers, duration });
+
+  // Helper function to calculate date for a given day
+  const getDateForDay = (day: number): string => {
+    const parts = startDate.split('/');
+    const dayNum = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const year = parseInt(parts[2], 10);
+    
+    const date = new Date(year, month, dayNum);
+    date.setDate(date.getDate() + day - 1);
+    
+    const resultDay = String(date.getDate()).padStart(2, '0');
+    const resultMonth = String(date.getMonth() + 1).padStart(2, '0');
+    const resultYear = date.getFullYear();
+    
+    return `${resultDay}/${resultMonth}/${resultYear}`;
+  };
 
   // Mock itinerary based on popular destinations
   const itineraries: Record<string, ItineraryDay[]> = {
     'đà nẵng': [
       {
         day: 1,
-        date: startDate,
+        date: getDateForDay(1),
         activities: ['Khám phá phố cố kính Hội An', 'Thưởng thức cơm lam', 'Dạo phố đêm'],
         meals: ['Cơm lam Hội An', 'Mì Quảng', 'Bánh vạc'],
         accommodation: 'Khách sạn 4 sao tại Mỹ Khê',
@@ -62,7 +89,7 @@ export const generateItinerary = (
       },
       {
         day: 2,
-        date: startDate,
+        date: getDateForDay(2),
         activities: ['Tắm biển Mỹ Khê', 'Chèo thuyền kayak', 'Picnic bãi biển'],
         meals: ['Hải sản tươi sống', 'Bánh tráng nướng', 'Cà phê vỉa hè'],
         accommodation: 'Khách sạn 4 sao tại Mỹ Khê',
@@ -70,7 +97,7 @@ export const generateItinerary = (
       },
       {
         day: 3,
-        date: endDate,
+        date: getDateForDay(3),
         activities: ['Viếng Chùa Linh Ứng', 'Leo núi Sơn Trà', 'Shopping tại CMN'],
         meals: ['Lẩu Mắc Cú', 'Bánh căn Nha Trang style', 'Ăn tối lần cuối'],
         accommodation: 'Chuẩn bị về',
@@ -80,7 +107,7 @@ export const generateItinerary = (
     'đà lạt': [
       {
         day: 1,
-        date: startDate,
+        date: getDateForDay(1),
         activities: ['Đến Đà Lạt', 'Thăm Phủ Thái Nhân', 'Dạo phố cổ'],
         meals: ['Cơm lốc', 'Bánh mì Pâtê', 'Cà phê trứng'],
         accommodation: 'Khách sạn tại trung tâm thành phố',
@@ -88,7 +115,7 @@ export const generateItinerary = (
       },
       {
         day: 2,
-        date: startDate,
+        date: getDateForDay(2),
         activities: ['Thác Cam Ly', 'Hồ Tuyền Lâm', 'Vườn hoa thập nhị'],
         meals: ['Thịt nướng', 'Rau cải xào', 'Sữa chua nước cốt dừa'],
         accommodation: 'Khách sạn tại trung tâm thành phố',
@@ -96,7 +123,7 @@ export const generateItinerary = (
       },
       {
         day: 3,
-        date: endDate,
+        date: getDateForDay(3),
         activities: ['Thác Voi', 'Thiền viện Trúc Lâm', 'Mua quà lưu niệm'],
         meals: ['Cháo cua', 'Canh chua cá', 'Ăn tối lần cuối'],
         accommodation: 'Chuẩn bị về',
@@ -106,7 +133,7 @@ export const generateItinerary = (
     'phú quốc': [
       {
         day: 1,
-        date: startDate,
+        date: getDateForDay(1),
         activities: ['Bay đến Phú Quốc', 'Check-in resort', 'Tắm biển Ông Lang'],
         meals: ['Hải sản BBQ', 'Cơm chiên Thái', 'Sinh tố trái cây'],
         accommodation: 'Resort 5 sao bãi Ông Lang',
@@ -114,7 +141,7 @@ export const generateItinerary = (
       },
       {
         day: 2,
-        date: startDate,
+        date: getDateForDay(2),
         activities: ['Lặn ngắm san hô', 'Chèo kayak gần rạn san hô', 'Sunset fishing'],
         meals: ['Hàu nướng', 'Mực nướng', 'Salad cua'],
         accommodation: 'Resort 5 sao bãi Ông Lang',
@@ -122,7 +149,7 @@ export const generateItinerary = (
       },
       {
         day: 3,
-        date: startDate,
+        date: getDateForDay(3),
         activities: ['Nhà tù Phú Quốc', 'Chợ đêm', 'Chia tay đất Phú Quốc'],
         meals: ['Bánh hoai', 'Lẩu cá', 'Ăn tối lần cuối'],
         accommodation: 'Bay về',
