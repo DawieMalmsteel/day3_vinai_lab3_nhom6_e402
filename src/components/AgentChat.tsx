@@ -1,14 +1,9 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Send,
-  Plane,
-  Hotel,
-  MapPin,
   Loader2,
   User,
   Bot,
-  Sparkles,
-  ChevronRight,
 } from "lucide-react";
 import Markdown from "react-markdown";
 import { clsx, type ClassValue } from "clsx";

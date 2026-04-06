@@ -248,7 +248,14 @@ export const chatWithTravelAgent = async (messages: { role: string; parts: any[]
         parts.push({
           functionCall: {
             name: tc.function.name,
-            args: JSON.parse(tc.function.arguments),
+            args: (() => {
+              try {
+                return JSON.parse(tc.function.arguments);
+              } catch (e) {
+                debug.error('AGENT', 'Failed to parse tool arguments', tc.function.arguments);
+                return { query: tc.function.arguments }; // Fallback for simple queries
+              }
+            })(),
             id: tc.id
           }
         });
@@ -257,11 +264,19 @@ export const chatWithTravelAgent = async (messages: { role: string; parts: any[]
 
     const result: GenerateContentResponse = {
       text: message.content || "",
-      functionCalls: message.tool_calls?.map((tc: any) => ({
-        id: tc.id,
-        name: tc.function.name,
-        args: JSON.parse(tc.function.arguments)
-      })),
+      functionCalls: message.tool_calls?.map((tc: any) => {
+        let args = {};
+        try {
+          args = JSON.parse(tc.function.arguments);
+        } catch (e) {
+          args = { query: tc.function.arguments };
+        }
+        return {
+          id: tc.id,
+          name: tc.function.name,
+          args: args
+        };
+      }),
       candidates: [{ content: { role: 'model', parts: parts } }]
     };
 
