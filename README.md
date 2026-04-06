@@ -3,7 +3,7 @@
 - Phạm Đăng Phong debug log AI
 - Anh Sơn thêm provider Gemini bên thứ 3
 - Phạm Minh Khang thêm provider Openrouter cho app, thêm brave search cho app
-- Phan Dương Định init projects, tạo giao diện, thêm connect Gemini AI cho app, ghi đè system prompt, access websearch, thêm thông tin ban đầu cho chat nếu user thiếu thông tin phải hỏi thêm
+- Phan Dương Định init projects, tạo giao diện, thêm connect Gemini AI cho app, ghi đè system prompt, access websearch, thêm thông tin ban đầu cho chat nếu user thiếu thông tin phải hỏi thêm, thêm Agent.md cho vibe code, thêm lớp bảo vệ cho AI chỉ trả lời câu hỏi trong vùng được cho phép
 
 ## Run Locally
 
