@@ -1,6 +1,8 @@
-.env
-logs/
-__pycache__/
-*.log
+node_modules/
+build/
+dist/
+coverage/
 .DS_Store
-models/
+*.log
+.env*
+!.env.example
